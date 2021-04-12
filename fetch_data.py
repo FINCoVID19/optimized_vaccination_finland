@@ -113,7 +113,7 @@ def fetch_thl_vaccines_erva_weekly(logger, filename=None):
     return vaccinated_erva
 
 
-def fetch_thl_vaccines_erva_daily(logger, filename=None):
+def construct_thl_vaccines_erva_daily(logger, filename=None):
     logger.debug('Getting THL vaccination statistics')
 
     # Select the appropriate URL
@@ -365,7 +365,7 @@ def fetch_finland_cases_age_weekly(logger):
     return cases_age, cases_age_prop
 
 
-def fetch_finland_age_cases_daily(logger):
+def construct_finland_age_cases_daily(logger):
     cases, cases_prop = fetch_finland_cases_age_weekly(logger)
     cases_list = cases.values
     cases_prop_list = cases_prop.values
@@ -396,7 +396,6 @@ def fetch_finland_age_cases_daily(logger):
                          str(cases_week_prop[2, 2])]
             line_str_day = ';'.join(line_day)
             line_str_prop = ';'.join(line_prop)
-            logger.debug(line_str_prop)
             final_lines_day.append(line_str_day)
             final_lines_prop.append(line_str_prop)
 
@@ -437,21 +436,42 @@ def construct_cases_age_erva_daily(logger):
     return cases_by_age_erva
 
 
-def seed_epidemic_erva(logger, filename, seed_period=7, a=0.5, lat_period=2):
-    matrix_cases, matrix_ervas, matrix_dates = fetch_thl_cases_erva_daily(logger)
-    infectious_detected = np.zeros_like(matrix_cases)
-    recovered_detected = np.zeros_like(matrix_cases)
+def seed_epidemic(logger, filename, erva_pop_file,
+                  inf_period=7, a=0.5, lat_period=2):
+    cases_by_age_erva = construct_cases_age_erva_daily(logger)
 
-    days = len(matrix_dates)
+    cases_by_age_erva.sort_values(['Time', 'erva'])
+    dates = pd.unique(cases_by_age_erva['Time'])
+    ervas = pd.unique(cases_by_age_erva['erva'])
+    num_ervas = len(ervas)
+    logger.debug(ervas)
+    ages_names = cases_by_age_erva.columns[2:]
+
+    cases_erva_age_npy = cases_by_age_erva.values
+    cases_erva_age_npy = cases_erva_age_npy[:, 2:]
+    dates_ervas, ages = cases_erva_age_npy.shape
+    assert dates_ervas % num_ervas == 0
+    days = int(dates_ervas/num_ervas)
+    cases_erva_age_npy = cases_erva_age_npy.reshape(days, num_ervas, ages)
+    cases_erva_age_npy = cases_erva_age_npy.astype(np.int32)
+
+    assert len(ages_names) == ages
+    assert len(dates) == days
+
+    infectious_detected = np.zeros_like(cases_erva_age_npy)
+    recovered_detected = np.zeros_like(cases_erva_age_npy)
+
     for day_t in range(days):
-        omega = day_t-seed_period
+        omega = day_t-inf_period
         if omega < 0:
             omega = 0
-        cases_in_period = matrix_cases[omega:day_t, ]
+        cases_in_period = cases_erva_age_npy[omega:day_t, ]
         # Get the total infected in the period and assign to time t
-        infectious_detected[day_t, :] = cases_in_period.sum(axis=0)
+        # logger.debug(cases_in_period.shape)
+        infectious_detected[day_t, ] = cases_in_period.sum(axis=0)
 
-        recovered_period = matrix_cases[:omega, ]
+        recovered_period = cases_erva_age_npy[:omega, ]
+        # logger.debug('Recovered: %s' % recovered_period.shape)
         # Get the total recovered and assign them to time t
         recovered_detected[day_t, :] = recovered_period.sum(axis=0)
 
@@ -462,40 +482,47 @@ def seed_epidemic_erva(logger, filename, seed_period=7, a=0.5, lat_period=2):
     infected_total = infectious_detected + infectious_undetected
     recovered_total = recovered_detected + recovered_undetected
 
-    exposed_total = np.zeros_like(matrix_cases)
+    exposed_total = np.zeros_like(cases_erva_age_npy)
     for day_t in range(days):
         if day_t+lat_period >= days:
             break
         exposed_total[day_t, :] = infected_total[day_t+lat_period, :]
 
-    pop_ervas = static_population_erva(logger)
-    pop_ervas_ordered = [pop_ervas[erva] for erva in matrix_ervas]
-    pop_ervas_ordered = np.array(pop_ervas_ordered)
-    # To prepare for broadcasting operation
-    pop_ervas_ordered = pop_ervas_ordered[np.newaxis, :]
+    pop_ervas, _ = static_population_erva_age(logger, erva_pop_file)
+    pop_ervas = pop_ervas[~pop_ervas['erva'].str.contains('All')]
+    pop_ervas = pop_ervas.sort_values(['erva'])
+    pop_ervas_npy = pop_ervas['Total'].values
+    pop_ervas_npy = pop_ervas_npy.reshape(num_ervas, ages)
 
-    susceptible = np.zeros_like(matrix_cases)
-    susceptible = pop_ervas_ordered - exposed_total - infected_total - recovered_total
+    # To prepare for broadcasting operation
+    pop_ervas_npy = pop_ervas_npy[np.newaxis, :]
+
+    susceptible = np.zeros_like(cases_erva_age_npy)
+    susceptible = pop_ervas_npy - exposed_total - infected_total - recovered_total
 
     complete_dataframe = pd.DataFrame()
-    for erva_idx in range(len(matrix_ervas)):
-        dataframe_data = {
-            'date': matrix_dates,
-            'erva': [matrix_ervas[erva_idx]]*len(matrix_dates),
-            'susceptible': susceptible[:, erva_idx].astype(np.int32),
-            'infected detected': infectious_detected[:, erva_idx].astype(np.int32),
-            'infected undetected': infectious_undetected[:, erva_idx].astype(np.int32),
-            'infected': infected_total[:, erva_idx].astype(np.int32),
-            'exposed': exposed_total[:, erva_idx].astype(np.int32),
-            'recovered detected': recovered_detected[:, erva_idx].astype(np.int32),
-            'recovered undetected': recovered_undetected[:, erva_idx].astype(np.int32),
-            'recovered': recovered_total[:, erva_idx].astype(np.int32)
-        }
-        erva_dataframe = pd.DataFrame(data=dataframe_data)
-        complete_dataframe = complete_dataframe.append(erva_dataframe)
+    for erva_i, erva_name in enumerate(ervas):
+        for age_i, age_name in enumerate(ages_names):
+            dataframe_data = {
+                'date': dates,
+                'erva': [erva_name]*days,
+                'age': [age_name]*days,
+                'susceptible': susceptible[:, erva_i, age_i].astype(np.int32),
+                'infected detected': infectious_detected[:, erva_i, age_i].astype(np.int32),
+                'infected undetected': infectious_undetected[:, erva_i, age_i].astype(np.int32),
+                'infected': infected_total[:, erva_i, age_i].astype(np.int32),
+                'exposed': exposed_total[:, erva_i, age_i].astype(np.int32),
+                'recovered detected': recovered_detected[:, erva_i, age_i].astype(np.int32),
+                'recovered undetected': recovered_undetected[:, erva_i, age_i].astype(np.int32),
+                'recovered': recovered_total[:, erva_i, age_i].astype(np.int32)
+            }
+            erva_age_dataframe = pd.DataFrame(data=dataframe_data)
+            complete_dataframe = complete_dataframe.append(erva_age_dataframe)
 
     complete_dataframe.to_csv(filename, index=False)
     logger.info('Results written to: %s' % (filename, ))
+
+    return complete_dataframe
 
 
 if __name__ == "__main__":
@@ -524,8 +551,11 @@ if __name__ == "__main__":
     try:
         stats_dir = os.path.join(curr_dir, 'stats')
 
-        # out_csv_filename = os.path.join(stats_dir, 'erva_seeds.csv')
-        # seed_epidemic_erva(logger, out_csv_filename)
+        erva_pop_file = os.path.join(stats_dir, 'erva_population_age_2020.csv')
+        # static_population_erva_age(logger, erva_pop_file)
+
+        out_csv_filename = os.path.join(stats_dir, 'erva_age_seeds.csv')
+        seed_epidemic(logger, out_csv_filename, erva_pop_file)
 
         # out_csv_filename = os.path.join(stats_dir, 'erva_vaccinations.csv')
         # fetch_thl_vaccines_erva_weekly(logger, out_csv_filename)
@@ -535,9 +565,6 @@ if __name__ == "__main__":
 
         # fetch_thl_cases_erva_weekly(logger)
 
-        # age_file = os.path.join(stats_dir, 'erva_population_age_2020.csv')
-        # static_population_erva_age(logger, age_file)
-
-        construct_cases_age_erva_daily(logger)
+        # construct_cases_age_erva_daily(logger)
     except Exception:
         logger.exception("Fatal error in main loop")
