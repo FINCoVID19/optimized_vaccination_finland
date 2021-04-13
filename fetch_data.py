@@ -25,6 +25,21 @@ def transform_thl_week_datetime(thl_time):
     return monday_of_week
 
 
+def divide_equally_week_values(week_values):
+    assert len(week_values.shape) == 1
+    day_values = np.zeros((len(week_values), 7))
+
+    for idx, value in enumerate(week_values):
+        remaining = int(value % 7)
+        if remaining == 0:
+            day_values[idx, :] = value/7
+        else:
+            day_values[idx, :] = np.floor(value/7)
+            day_values[idx, :remaining] += 1
+
+    return day_values
+
+
 def static_population_erva(logger):
     population_data = {
         "HYKS": 2198182,
@@ -106,6 +121,12 @@ def fetch_thl_vaccines_erva_weekly(logger, filename=None):
     vaccinated_erva = vaccinated_erva.sort_values(by=['erva', 'Time', 'age group', 'Vaccination dose'])
     logger.debug('Sorting by ERVA')
 
+    # Removing total counts in Finland
+    vaccinated_erva = vaccinated_erva[~vaccinated_erva['Time'].str.contains('All')]
+    vaccinated_erva = vaccinated_erva[~vaccinated_erva['erva'].str.contains('All')]
+    vaccinated_erva = vaccinated_erva[~vaccinated_erva['age group'].str.contains('All')]
+    vaccinated_erva = vaccinated_erva[~vaccinated_erva['Vaccination dose'].str.contains('All')]
+
     if filename is not None:
         vaccinated_erva.to_csv(filename, index=False)
         logger.info('Results written to: %s' % (filename, ))
@@ -114,98 +135,51 @@ def fetch_thl_vaccines_erva_weekly(logger, filename=None):
 
 
 def construct_thl_vaccines_erva_daily(logger, filename=None):
-    logger.debug('Getting THL vaccination statistics')
+    vaccinated_weekly = fetch_thl_vaccines_erva_weekly(logger)
+    vaccinated_list = vaccinated_weekly.values
 
-    # Select the appropriate URL
-    url = REQUESTS['vaccination']
-    headers = {
-        'User-Agent': 'Me'
-    }
-    logger.debug(('Sending the request..\n'
-                  'URL: %s\n'
-                  'Headers: %s\n') % (url,
-                                      json.dumps(headers, indent=1)))
-    # Load data from THL's API as CSV
-    response = requests.get(url, headers=headers)
-    if response.status_code != 200:
-        logger.error(response.content)
-        raise RuntimeError("THL's API failed!")
+    dates = np.unique(vaccinated_list[:, 1])
+    ervas = np.unique(vaccinated_list[:, 0])
 
-    # Tell to the response what is the correct encoding
-    response.encoding = response.apparent_encoding
-    logger.info('Got THL reported cases!')
+    header = 'Time;erva;First 0-14;Second 0-14;First 15-64;Second 15-64;First 65+;Second 65+'
+    final_lines = [header, ]
+    for date in dates:
+        for erva in ervas:
+            vacc_week = vaccinated_list[np.where(
+                            (vaccinated_list[:, 1] == date) & (vaccinated_list[:, 0] == erva)
+                        )]
+            vacc_day = np.copy(vacc_week)
+            vacc_day_vals = divide_equally_week_values(vacc_day[:, 4])
 
-    hcd_erva_mapping = REQUESTS['hcd_erva_mapping']
-    age_group_mapping = REQUESTS['age_group_mapping']
-
-    all_lines = response.text.split('\n')
-    final_lines = []
-    headers = all_lines[0].strip()
-    headers = headers + ';erva'
-    final_lines.append(headers)
-    # Reading line by line to fix daily dates manually
-    for i in range(1, len(all_lines)):
-        line = all_lines[i].strip().split(';')
-        # If the line is empty skip iteration
-        if len(line) == 1:
-            continue
-        age, vacc_dose, time, hcd_name, val = line
-        # If the line is a global computation skip iteration
-        if time == 'All times':
-            continue
-
-        # Get the hcd code for the area
-        erva = str(hcd_erva_mapping[hcd_name])
-        age_group = str(age_group_mapping[age])
-
-        week_number = int(time[-2:])
-        year = time[5:9]
-        # Making correction to match Python date to THL dates
-        if year == '2020':
-            week_number = week_number - 1
-        new_time = 'Year %s Week %02.f-1' % (year, week_number)
-        # Get monday date based on the week number
-        # This needs to be done bc THL does not provide daily counts only weekly
-        monday_of_week = datetime.datetime.strptime(new_time, "Year %Y Week %W-%w")
-
-        # Get the value of the week
-        if val == '':
-            val = 0
-        else:
-            val = int(val)
-
-        # Get an estimation of the daily vaccinations with the average
-        avg_val_day = val/7
-        avg_str = str(avg_val_day)
-
-        # Augment by day, start on monday and finish sunday (7 days)
-        for day in range(7):
-            date = monday_of_week + datetime.timedelta(days=day)
-            date_str = date.strftime('%Y-%m-%d')
-            line = [age_group, vacc_dose, date_str, hcd_name, avg_str, erva]
-            line_str = ';'.join(line)
-            final_lines.append(line_str)
+            monday_of_week = transform_thl_week_datetime(date)
+            # Augment by day, start on monday and finish sunday (7 days)
+            for day in range(7):
+                date_i = monday_of_week + datetime.timedelta(days=day)
+                date_str = date_i.strftime('%Y-%m-%d')
+                line = [date_str,
+                        erva,
+                        str(vacc_day_vals[0, day]),
+                        str(vacc_day_vals[1, day]),
+                        str(vacc_day_vals[2, day]),
+                        str(vacc_day_vals[3, day]),
+                        str(vacc_day_vals[4, day]),
+                        str(vacc_day_vals[5, day])]
+                line_str = ';'.join(line)
+                final_lines.append(line_str)
 
     complete_csv = '\n'.join(final_lines)
+
     buffer_for_pandas = StringIO(complete_csv)
-    vaccinated_df = pd.read_csv(buffer_for_pandas, sep=";")
+    vaccinated_daily = pd.read_csv(buffer_for_pandas, sep=";")
+
     logger.debug('Constructed pandas dataframe')
-
-    columns_agg_erva = ['Age',
-                        'Vaccination dose',
-                        'Time',
-                        'erva']
-    vaccinated_erva = vaccinated_df.groupby(by=columns_agg_erva, as_index=False).sum()
-
-    vaccinated_erva = vaccinated_erva[['erva', 'Time', 'Age', 'Vaccination dose', 'val']]
-    vaccinated_erva = vaccinated_erva.sort_values(by=['erva', 'Time', 'Age', 'Vaccination dose'])
-    logger.debug('Sorting by ERVA')
-
     if filename is not None:
-        vaccinated_erva.to_csv(filename, index=False)
+        vaccinated_daily.to_csv(filename, index=False)
         logger.info('Results written to: %s' % (filename, ))
 
-    return vaccinated_erva
+    logger.debug(vaccinated_daily)
+
+    return vaccinated_daily
 
 
 def fetch_thl_cases_erva_daily(logger):
@@ -377,7 +351,7 @@ def construct_finland_age_cases_daily(logger):
     for date in dates:
         cases_week = cases_list[np.where(cases_list[:, 0] == date)]
         cases_day = np.copy(cases_week)
-        cases_day[:, 2] = cases_day[:, 2]/7
+        cases_daily_vals = divide_equally_week_values(cases_day[:, 2])
 
         cases_week_prop = cases_prop_list[np.where(cases_prop_list[:, 0] == date)]
 
@@ -387,9 +361,9 @@ def construct_finland_age_cases_daily(logger):
             date_i = monday_of_week + datetime.timedelta(days=day)
             date_str = date_i.strftime('%Y-%m-%d')
             line_day = [date_str,
-                        str(cases_day[0, 2]),
-                        str(cases_day[1, 2]),
-                        str(cases_day[2, 2])]
+                        str(cases_daily_vals[0, day]),
+                        str(cases_daily_vals[1, day]),
+                        str(cases_daily_vals[2, day])]
             line_prop = [date_str,
                          str(cases_week_prop[0, 2]),
                          str(cases_week_prop[1, 2]),
@@ -412,7 +386,7 @@ def construct_finland_age_cases_daily(logger):
 
 
 def construct_cases_age_erva_daily(logger):
-    _, cases_age_prop = fetch_finland_age_cases_daily(logger)
+    _, cases_age_prop = construct_finland_age_cases_daily(logger)
     cases_erva = fetch_thl_cases_erva_daily(logger)
 
     cases_age_prop_list = cases_age_prop.values
@@ -436,8 +410,8 @@ def construct_cases_age_erva_daily(logger):
     return cases_by_age_erva
 
 
-def seed_epidemic(logger, filename, erva_pop_file,
-                  inf_period=7, a=0.5, lat_period=2):
+def compatment_values_daily(logger, erva_pop_file, filename=None,
+                            inf_period=7, a=0.5, lat_period=2):
     cases_by_age_erva = construct_cases_age_erva_daily(logger)
 
     cases_by_age_erva.sort_values(['Time', 'erva'])
@@ -519,8 +493,9 @@ def seed_epidemic(logger, filename, erva_pop_file,
             erva_age_dataframe = pd.DataFrame(data=dataframe_data)
             complete_dataframe = complete_dataframe.append(erva_age_dataframe)
 
-    complete_dataframe.to_csv(filename, index=False)
-    logger.info('Results written to: %s' % (filename, ))
+    if filename is not None:
+        complete_dataframe.to_csv(filename, index=False)
+        logger.info('Results written to: %s' % (filename, ))
 
     return complete_dataframe
 
@@ -551,17 +526,20 @@ if __name__ == "__main__":
     try:
         stats_dir = os.path.join(curr_dir, 'stats')
 
-        erva_pop_file = os.path.join(stats_dir, 'erva_population_age_2020.csv')
+        # erva_pop_file = os.path.join(stats_dir, 'erva_population_age_2020.csv')
         # static_population_erva_age(logger, erva_pop_file)
 
-        out_csv_filename = os.path.join(stats_dir, 'erva_age_seeds.csv')
-        seed_epidemic(logger, out_csv_filename, erva_pop_file)
+        # out_csv_filename = os.path.join(stats_dir, 'erva_age_seeds.csv')
+        # seed_epidemic(logger, out_csv_filename, erva_pop_file)
 
         # out_csv_filename = os.path.join(stats_dir, 'erva_vaccinations.csv')
         # fetch_thl_vaccines_erva_weekly(logger, out_csv_filename)
 
         # out_csv_filename = os.path.join(stats_dir, 'erva_vaccinations_daily.csv')
-        # fetch_thl_vaccines_erva_daily(logger, out_csv_filename)
+        # construct_thl_vaccines_erva_daily(logger, out_csv_filename)
+
+        # age, _ = construct_finland_age_cases_daily(logger)
+        # logger.debug(age.loc[age['Time'] >= '2021-01-01'])
 
         # fetch_thl_cases_erva_weekly(logger)
 
