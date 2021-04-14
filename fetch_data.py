@@ -37,6 +37,8 @@ def divide_equally_week_values(week_values):
             day_values[idx, :] = np.floor(value/7)
             day_values[idx, :remaining] += 1
 
+    day_values = day_values.astype(np.int32)
+
     return day_values
 
 
@@ -141,7 +143,7 @@ def construct_thl_vaccines_erva_daily(logger, filename=None):
     dates = np.unique(vaccinated_list[:, 1])
     ervas = np.unique(vaccinated_list[:, 0])
 
-    header = 'Time;erva;First 0-14;Second 0-14;First 15-64;Second 15-64;First 65+;Second 65+'
+    header = 'date;erva;age;First dose;Second dose'
     final_lines = [header, ]
     for date in dates:
         for erva in ervas:
@@ -158,10 +160,23 @@ def construct_thl_vaccines_erva_daily(logger, filename=None):
                 date_str = date_i.strftime('%Y-%m-%d')
                 line = [date_str,
                         erva,
+                        '0-14',
                         str(vacc_day_vals[0, day]),
-                        str(vacc_day_vals[1, day]),
+                        str(vacc_day_vals[1, day])]
+                line_str = ';'.join(line)
+                final_lines.append(line_str)
+
+                line = [date_str,
+                        erva,
+                        '15-64',
                         str(vacc_day_vals[2, day]),
-                        str(vacc_day_vals[3, day]),
+                        str(vacc_day_vals[3, day])]
+                line_str = ';'.join(line)
+                final_lines.append(line_str)
+
+                line = [date_str,
+                        erva,
+                        '65+',
                         str(vacc_day_vals[4, day]),
                         str(vacc_day_vals[5, day])]
                 line_str = ';'.join(line)
@@ -176,8 +191,6 @@ def construct_thl_vaccines_erva_daily(logger, filename=None):
     if filename is not None:
         vaccinated_daily.to_csv(filename, index=False)
         logger.info('Results written to: %s' % (filename, ))
-
-    logger.debug(vaccinated_daily)
 
     return vaccinated_daily
 
@@ -410,8 +423,8 @@ def construct_cases_age_erva_daily(logger):
     return cases_by_age_erva
 
 
-def compatment_values_daily(logger, erva_pop_file, filename=None,
-                            inf_period=7, a=0.5, lat_period=2):
+def compartment_values_daily(logger, erva_pop_file, filename=None,
+                             inf_period=7, a=0.5, lat_period=2):
     cases_by_age_erva = construct_cases_age_erva_daily(logger)
 
     cases_by_age_erva.sort_values(['Time', 'erva'])
@@ -500,6 +513,27 @@ def compatment_values_daily(logger, erva_pop_file, filename=None,
     return complete_dataframe
 
 
+def full_epidemic_state_finland(logger, erva_pop_file, filename=None):
+    compart_df = compartment_values_daily(logger, erva_pop_file)
+    vacc_df = construct_thl_vaccines_erva_daily(logger)
+    epidemic_state = pd.merge(compart_df, vacc_df,
+                              on=['date', 'erva', 'age'],
+                              how='left')
+    # Merge will left missing values with NaNs. Filled them with 0
+    epidemic_state = epidemic_state.fillna(0)
+    epidemic_state = epidemic_state.astype({'First dose': 'int32',
+                                            'Second dose': 'int32'})
+
+    epidemic_state['First dose cumulative'] = epidemic_state.groupby(['erva', 'age'])['First dose'].cumsum()
+    epidemic_state['Second dose cumulative'] = epidemic_state.groupby(['erva', 'age'])['Second dose'].cumsum()
+
+    if filename is not None:
+        epidemic_state.to_csv(filename, index=False)
+        logger.info('Results written to: %s' % (filename, ))
+
+    return epidemic_state
+
+
 if __name__ == "__main__":
     # Select data directory
     curr_dir = os.path.dirname(os.path.realpath(__file__))
@@ -526,11 +560,11 @@ if __name__ == "__main__":
     try:
         stats_dir = os.path.join(curr_dir, 'stats')
 
-        # erva_pop_file = os.path.join(stats_dir, 'erva_population_age_2020.csv')
+        erva_pop_file = os.path.join(stats_dir, 'erva_population_age_2020.csv')
         # static_population_erva_age(logger, erva_pop_file)
 
-        # out_csv_filename = os.path.join(stats_dir, 'erva_age_seeds.csv')
-        # seed_epidemic(logger, out_csv_filename, erva_pop_file)
+        out_csv_filename = os.path.join(stats_dir, 'epidemic_finland.csv')
+        full_epidemic_state_finland(logger, erva_pop_file, out_csv_filename)
 
         # out_csv_filename = os.path.join(stats_dir, 'erva_vaccinations.csv')
         # fetch_thl_vaccines_erva_weekly(logger, out_csv_filename)
