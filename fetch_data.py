@@ -66,6 +66,10 @@ def static_population_erva_age(logger, csv_file):
     population_age_df = population_age_df[~population_age_df['Age'].str.contains('Total')]
     population_age_df['Total'] = population_age_df['Total'].astype('int32')
 
+    age_group_mapping = REQUESTS['age_groups_mapping_population']
+    population_age_df['age_group'] = population_age_df.apply(lambda row: age_group_mapping[row['Age']], axis=1)
+    population_age_df = population_age_df.groupby(by=['erva', 'age_group'],
+                                                  as_index=False).sum()
     pop_age_prop = population_age_df.copy()
     ervas = pd.unique(pop_age_prop['erva'])
     for erva in ervas:
