@@ -176,8 +176,9 @@ def fetch_hs_hospitalizations(logger):
     return hospital_df
 
 
-def construct_thl_vaccines_erva_daily(logger, filename=None):
-    vaccinated_weekly = fetch_thl_vaccines_erva_weekly(logger)
+def construct_thl_vaccines_erva_daily(logger, filename=None, number_age_groups=9):
+    vaccinated_weekly = fetch_thl_vaccines_erva_weekly(logger,
+                                                       number_age_groups=number_age_groups)
     vaccinated_list = vaccinated_weekly.values
 
     dates = np.unique(vaccinated_list[:, 1])
@@ -391,7 +392,8 @@ def fetch_finland_cases_age_weekly(logger, number_age_groups=9):
 
 
 def construct_finland_age_cases_daily(logger, number_age_groups=9):
-    cases, cases_prop = fetch_finland_cases_age_weekly(logger)
+    cases, cases_prop = fetch_finland_cases_age_weekly(logger,
+                                                       number_age_groups=number_age_groups)
     cases_list = cases.values
     cases_prop_list = cases_prop.values
     dates = np.unique(cases_list[:, 0])
@@ -437,7 +439,8 @@ def construct_finland_age_cases_daily(logger, number_age_groups=9):
 
 
 def construct_cases_age_erva_daily(logger, number_age_groups=9):
-    _, cases_age_prop = construct_finland_age_cases_daily(logger)
+    _, cases_age_prop = construct_finland_age_cases_daily(logger,
+                                                          number_age_groups=number_age_groups)
     cases_erva = fetch_thl_cases_erva_daily(logger)
 
     cases_age_prop_list = cases_age_prop.values
@@ -465,8 +468,10 @@ def construct_cases_age_erva_daily(logger, number_age_groups=9):
 
 
 def compartment_values_daily(logger, erva_pop_file, filename=None,
-                             inf_period=7, a=2.46, lat_period=2):
-    cases_by_age_erva = construct_cases_age_erva_daily(logger)
+                             inf_period=7, a=2.46, lat_period=2,
+                             number_age_groups=9):
+    cases_by_age_erva = construct_cases_age_erva_daily(logger,
+                                                       number_age_groups=number_age_groups)
 
     cases_by_age_erva.sort_values(['Time', 'erva'])
     dates = pd.unique(cases_by_age_erva['Time'])
@@ -555,9 +560,12 @@ def compartment_values_daily(logger, erva_pop_file, filename=None,
     return complete_dataframe
 
 
-def full_epidemic_state_finland(logger, erva_pop_file, filename=None):
-    compart_df = compartment_values_daily(logger, erva_pop_file)
-    vacc_df = construct_thl_vaccines_erva_daily(logger)
+def full_epidemic_state_finland(logger, erva_pop_file, filename=None,
+                                number_age_groups=9):
+    compart_df = compartment_values_daily(logger, erva_pop_file,
+                                          number_age_groups=number_age_groups)
+    vacc_df = construct_thl_vaccines_erva_daily(logger,
+                                                number_age_groups=number_age_groups)
     epidemic_state = pd.merge(compart_df, vacc_df,
                               on=['date', 'erva', 'age'],
                               how='left')
@@ -607,7 +615,11 @@ if __name__ == "__main__":
         os.makedirs(out_dir, exist_ok=True)
 
         erva_pop_file = os.path.join(stats_dir, 'erva_population_age_2020.csv')
-        out_csv_filename = os.path.join(out_dir, 'epidemic_finland.csv')
-        full_epidemic_state_finland(logger, erva_pop_file, out_csv_filename)
+
+        out_csv_filename = os.path.join(out_dir, 'epidemic_finland_9.csv')
+        full_epidemic_state_finland(logger, erva_pop_file, out_csv_filename, number_age_groups=9)
+
+        out_csv_filename = os.path.join(out_dir, 'epidemic_finland_8.csv')
+        full_epidemic_state_finland(logger, erva_pop_file, out_csv_filename, number_age_groups=8)
     except Exception:
         logger.exception("Fatal error in main loop")
