@@ -6,7 +6,6 @@ import pandas as pd
 import numpy as np
 import logging
 import datetime
-# from scipy.stats import multinomial
 from logging import handlers
 from env_var import REQUESTS
 
@@ -57,7 +56,7 @@ def static_population_erva(logger):
     return population_data
 
 
-def static_population_erva_age(logger, csv_file):
+def static_population_erva_age(logger, csv_file, number_age_groups=9):
     population_age_df = pd.read_csv(csv_file, sep=";", encoding='utf-8')
     logger.debug('Constructed pandas dataframe')
 
@@ -66,7 +65,7 @@ def static_population_erva_age(logger, csv_file):
     population_age_df = population_age_df[~population_age_df['Age'].str.contains('Total')]
     population_age_df['Total'] = population_age_df['Total'].astype('int32')
 
-    age_group_mapping = REQUESTS['age_groups_mapping_population']
+    age_group_mapping = REQUESTS['age_group_mappings'][number_age_groups]['age_groups_mapping_population']
     population_age_df['age_group'] = population_age_df.apply(lambda row: age_group_mapping[row['Age']], axis=1)
     population_age_df = population_age_df.groupby(by=['erva', 'age_group'],
                                                   as_index=False).sum()
@@ -80,7 +79,7 @@ def static_population_erva_age(logger, csv_file):
     return population_age_df, pop_age_prop
 
 
-def fetch_thl_vaccines_erva_weekly(logger, filename=None):
+def fetch_thl_vaccines_erva_weekly(logger, filename=None, number_age_groups=9):
     logger.debug('Getting THL vaccination statistics')
 
     # Select the appropriate URL
@@ -113,7 +112,7 @@ def fetch_thl_vaccines_erva_weekly(logger, filename=None):
     vaccinated_df['erva'] = vaccinated_df.apply(lambda row: hcd_erva_mapping[row['Area']], axis=1)
     logger.debug('Augmented data with erva')
 
-    age_group_mapping = REQUESTS['age_group_mapping']
+    age_group_mapping = REQUESTS['age_group_mappings'][number_age_groups]['age_group_mapping']
     vaccinated_df['age group'] = vaccinated_df.apply(lambda row: age_group_mapping[row['Age']], axis=1)
     logger.debug('Augmented data with age groups')
 
@@ -138,6 +137,43 @@ def fetch_thl_vaccines_erva_weekly(logger, filename=None):
         logger.info('Results written to: %s' % (filename, ))
 
     return vaccinated_erva
+
+
+def fetch_hs_hospitalizations(logger):
+    logger.debug('Getting HS hospitalizations')
+
+    # Select the appropriate URL
+    url = REQUESTS['hospitalizations']
+    headers = {
+        'User-Agent': 'Me'
+    }
+    logger.debug(('Sending the request..\n'
+                  'URL: %s\n'
+                  'Headers: %s\n') % (url,
+                                      json.dumps(headers, indent=1)))
+    # Load data from THL's API as CSV
+    response = requests.get(url, headers=headers)
+    if response.status_code != 200:
+        logger.error(response.content)
+        raise RuntimeError("HS API failed!")
+
+    # Tell to the response what is the correct encoding
+    response.encoding = response.apparent_encoding
+
+    response_json = response.json()
+    hospitalizations = response_json['hospitalised']
+    hospital_df = pd.DataFrame(hospitalizations)
+
+    hospital_df = hospital_df[~hospital_df['area'].str.contains('Finland')]
+    hospital_df.columns = ['date', 'erva', 'hospitalized', 'ward', 'icu', 'dead']
+
+    hospital_df['date'] = hospital_df.apply(
+                            lambda row: row['date'].split('T')[0],
+                            axis=1
+                          )
+    hospital_df = hospital_df.sort_values(['date', 'erva'])
+
+    return hospital_df
 
 
 def construct_thl_vaccines_erva_daily(logger, filename=None):
@@ -275,7 +311,7 @@ def fetch_thl_cases_erva_weekly(logger):
     return reported_cases_erva
 
 
-def fetch_finland_cases_age_weekly(logger):
+def fetch_finland_cases_age_weekly(logger, number_age_groups=9):
     logger.debug('Getting THL reported cases')
 
     # Select the appropriate URL
@@ -311,14 +347,14 @@ def fetch_finland_cases_age_weekly(logger):
 
     new_cases_df['val'] = new_cases_df['val'].astype('int32')
 
-    age_group_mapping = REQUESTS['age_group_mapping_cases']
+    age_group_mapping = REQUESTS['age_group_mappings'][number_age_groups]['age_group_mapping_cases']
     new_cases_df['age_group'] = new_cases_df.apply(lambda row: age_group_mapping[row['Age']], axis=1)
     logger.debug('Augmented data age groups')
 
     cases_age = new_cases_df.groupby(by=['Time', 'age_group'], as_index=False).sum()
     logger.debug('Keeping only age groups')
 
-    age_groups = REQUESTS['age_groups']
+    age_groups = REQUESTS['age_group_mappings'][number_age_groups]['age_groups']
     cases_age_prop = cases_age.copy()
     all_times = pd.unique(cases_age['Time'])
     for time in all_times:
@@ -354,13 +390,13 @@ def fetch_finland_cases_age_weekly(logger):
     return cases_age, cases_age_prop
 
 
-def construct_finland_age_cases_daily(logger):
+def construct_finland_age_cases_daily(logger, number_age_groups=9):
     cases, cases_prop = fetch_finland_cases_age_weekly(logger)
     cases_list = cases.values
     cases_prop_list = cases_prop.values
     dates = np.unique(cases_list[:, 0])
 
-    age_groups = REQUESTS['age_groups']
+    age_groups = REQUESTS['age_group_mappings'][number_age_groups]['age_groups']
     header = 'Time'
     for age_i in age_groups:
         header += ';%s' % age_i
@@ -400,7 +436,7 @@ def construct_finland_age_cases_daily(logger):
     return age_cases_daily, age_cases_prop
 
 
-def construct_cases_age_erva_daily(logger):
+def construct_cases_age_erva_daily(logger, number_age_groups=9):
     _, cases_age_prop = construct_finland_age_cases_daily(logger)
     cases_erva = fetch_thl_cases_erva_daily(logger)
 
@@ -419,7 +455,7 @@ def construct_cases_age_erva_daily(logger):
             new_line = [time, erva, *cases_ages]
             cases_by_age_erva.append(new_line)
 
-    age_groups = REQUESTS['age_groups']
+    age_groups = REQUESTS['age_group_mappings'][number_age_groups]['age_groups']
     columns = ['Time', 'erva']
     for age_i in age_groups:
         columns.append(age_i)
@@ -445,7 +481,6 @@ def compartment_values_daily(logger, erva_pop_file, filename=None,
     assert dates_ervas % num_ervas == 0
     days = int(dates_ervas/num_ervas)
     cases_erva_age_npy = cases_erva_age_npy.reshape(days, num_ervas, ages)
-    cases_erva_age_npy = cases_erva_age_npy.astype(np.int32)
 
     assert len(ages_names) == ages
     assert len(dates) == days
@@ -459,17 +494,20 @@ def compartment_values_daily(logger, erva_pop_file, filename=None,
             omega = 0
         cases_in_period = cases_erva_age_npy[omega:day_t, ]
         # Get the total infected in the period and assign to time t
-        # logger.debug(cases_in_period.shape)
         infectious_detected[day_t, ] = cases_in_period.sum(axis=0)
 
         recovered_period = cases_erva_age_npy[:omega, ]
-        # logger.debug('Recovered: %s' % recovered_period.shape)
         # Get the total recovered and assign them to time t
         recovered_detected[day_t, :] = recovered_period.sum(axis=0)
 
-    logger.debug('Multiplied fraction: %f' % ((1-a)/a, ))
-    infectious_undetected = np.round(((1-a)/a)*infectious_detected)
-    recovered_undetected = np.round(((1-a)/a)*recovered_detected)
+    k = np.arange(9) + 1
+    upscale_factor = 1 + 9*k**(-2.46)
+    # Broadcasting operation
+    upscale_factor = upscale_factor[np.newaxis, np.newaxis, :]
+
+    logger.debug('Multiplied fraction: %s' % (upscale_factor, ))
+    infectious_undetected = infectious_detected * upscale_factor
+    recovered_undetected = recovered_detected * upscale_factor
 
     infected_total = infectious_detected + infectious_undetected
     recovered_total = recovered_detected + recovered_undetected
@@ -480,6 +518,7 @@ def compartment_values_daily(logger, erva_pop_file, filename=None,
             break
         exposed_total[day_t, :] = infected_total[day_t+lat_period, :]
 
+    # Getting the population to get the final Susceptibles
     pop_ervas, _ = static_population_erva_age(logger, erva_pop_file)
     pop_ervas = pop_ervas[~pop_ervas['erva'].str.contains('All')]
     pop_ervas = pop_ervas.sort_values(['erva'])
@@ -499,14 +538,12 @@ def compartment_values_daily(logger, erva_pop_file, filename=None,
                 'date': dates,
                 'erva': [erva_name]*days,
                 'age': [age_name]*days,
-                'susceptible': susceptible[:, erva_i, age_i].astype(np.int32),
-                'infected detected': infectious_detected[:, erva_i, age_i].astype(np.int32),
-                'infected undetected': infectious_undetected[:, erva_i, age_i].astype(np.int32),
-                'infected': infected_total[:, erva_i, age_i].astype(np.int32),
-                'exposed': exposed_total[:, erva_i, age_i].astype(np.int32),
-                'recovered detected': recovered_detected[:, erva_i, age_i].astype(np.int32),
-                'recovered undetected': recovered_undetected[:, erva_i, age_i].astype(np.int32),
-                'recovered': recovered_total[:, erva_i, age_i].astype(np.int32)
+                'susceptible': susceptible[:, erva_i, age_i],
+                'infected detected': infectious_detected[:, erva_i, age_i],
+                'infected undetected': infectious_undetected[:, erva_i, age_i],
+                'infected': infected_total[:, erva_i, age_i],
+                'exposed': exposed_total[:, erva_i, age_i],
+                'recovered': recovered_total[:, erva_i, age_i],
             }
             erva_age_dataframe = pd.DataFrame(data=dataframe_data)
             complete_dataframe = complete_dataframe.append(erva_age_dataframe)
@@ -531,6 +568,8 @@ def full_epidemic_state_finland(logger, erva_pop_file, filename=None):
 
     epidemic_state['First dose cumulative'] = epidemic_state.groupby(['erva', 'age'])['First dose'].cumsum()
     epidemic_state['Second dose cumulative'] = epidemic_state.groupby(['erva', 'age'])['Second dose'].cumsum()
+
+    epidemic_state['susceptible'] = epidemic_state['susceptible'] - epidemic_state['First dose cumulative']
 
     if filename is not None:
         epidemic_state.to_csv(filename, index=False)
@@ -564,24 +603,11 @@ if __name__ == "__main__":
     # Starting with the tasks (main loop)
     try:
         stats_dir = os.path.join(curr_dir, 'stats')
+        out_dir = os.path.join(curr_dir, 'out')
+        os.makedirs(out_dir, exist_ok=True)
 
         erva_pop_file = os.path.join(stats_dir, 'erva_population_age_2020.csv')
-        # static_population_erva_age(logger, erva_pop_file)
-
-        out_csv_filename = os.path.join(stats_dir, 'epidemic_finland.csv')
-        # full_epidemic_state_finland(logger, erva_pop_file, out_csv_filename)
-
-        # out_csv_filename = os.path.join(stats_dir, 'erva_vaccinations.csv')
-        # fetch_thl_vaccines_erva_weekly(logger, out_csv_filename)
-
-        # out_csv_filename = os.path.join(stats_dir, 'erva_vaccinations_daily.csv')
-        # construct_thl_vaccines_erva_daily(logger, out_csv_filename)
-
-        # age, _ = construct_finland_age_cases_daily(logger)
-        # logger.debug(age.loc[age['Time'] >= '2021-01-01'])
-
-        # fetch_thl_cases_erva_weekly(logger)
-
-        construct_cases_age_erva_daily(logger)
+        out_csv_filename = os.path.join(out_dir, 'epidemic_finland.csv')
+        full_epidemic_state_finland(logger, erva_pop_file, out_csv_filename)
     except Exception:
         logger.exception("Fatal error in main loop")
