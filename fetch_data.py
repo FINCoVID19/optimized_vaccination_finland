@@ -451,7 +451,7 @@ def construct_cases_age_erva_daily(logger, number_age_groups=9):
 
 
 def compartment_values_daily(logger, erva_pop_file, filename=None,
-                             inf_period=7, a=2.46, lat_period=2,
+                             inf_period=7, a=2.46, lat_period=3,
                              number_age_groups=9):
     cases_by_age_erva = construct_cases_age_erva_daily(logger,
                                                        number_age_groups=number_age_groups)
