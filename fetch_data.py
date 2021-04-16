@@ -465,7 +465,7 @@ def construct_cases_age_erva_daily(logger, number_age_groups=9):
 
 
 def compartment_values_daily(logger, erva_pop_file, filename=None,
-                             inf_period=7, a=0.5, lat_period=2):
+                             inf_period=7, a=2.46, lat_period=2):
     cases_by_age_erva = construct_cases_age_erva_daily(logger)
 
     cases_by_age_erva.sort_values(['Time', 'erva'])
@@ -500,8 +500,8 @@ def compartment_values_daily(logger, erva_pop_file, filename=None,
         # Get the total recovered and assign them to time t
         recovered_detected[day_t, :] = recovered_period.sum(axis=0)
 
-    k = np.arange(9) + 1
-    upscale_factor = 1 + 9*k**(-2.46)
+    k = np.arange(ages) + 1
+    upscale_factor = 1 + 9*k**(-a)
     # Broadcasting operation
     upscale_factor = upscale_factor[np.newaxis, np.newaxis, :]
 
