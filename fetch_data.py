@@ -24,23 +24,6 @@ def transform_thl_week_datetime(thl_time):
     return monday_of_week
 
 
-def divide_equally_week_values(week_values):
-    assert len(week_values.shape) == 1
-    day_values = np.zeros((len(week_values), 7))
-
-    for idx, value in enumerate(week_values):
-        remaining = int(value % 7)
-        if remaining == 0:
-            day_values[idx, :] = value/7
-        else:
-            day_values[idx, :] = np.floor(value/7)
-            day_values[idx, :remaining] += 1
-
-    day_values = day_values.astype(np.int32)
-
-    return day_values
-
-
 def static_population_erva(logger):
     population_data = {
         "HYKS": 2198182,
@@ -63,7 +46,6 @@ def static_population_erva_age(logger, csv_file, number_age_groups=9):
     population_age_df = population_age_df.drop(columns=['Males', 'Females'])
 
     population_age_df = population_age_df[~population_age_df['Age'].str.contains('Total')]
-    population_age_df['Total'] = population_age_df['Total'].astype('int32')
 
     age_group_mapping = REQUESTS['age_group_mappings'][number_age_groups]['age_groups_mapping_population']
     population_age_df['age_group'] = population_age_df.apply(lambda row: age_group_mapping[row['Age']], axis=1)
@@ -194,7 +176,7 @@ def construct_thl_vaccines_erva_daily(logger, filename=None, number_age_groups=9
                             (vaccinated_list[:, 1] == date) & (vaccinated_list[:, 0] == erva)
                         )]
             vacc_day = np.copy(vacc_week)
-            vacc_day_vals = divide_equally_week_values(vacc_day[:, 4])
+            vacc_day_vals = vacc_day[:, 4]/7
 
             monday_of_week = transform_thl_week_datetime(date)
             # Augment by day, start on monday and finish sunday (7 days)
@@ -206,8 +188,8 @@ def construct_thl_vaccines_erva_daily(logger, filename=None, number_age_groups=9
                     line = [date_str,
                             erva,
                             age_g,
-                            str(vacc_day_vals[line_counter, day]),
-                            str(vacc_day_vals[line_counter+1, day])]
+                            str(vacc_day_vals[line_counter]),
+                            str(vacc_day_vals[line_counter+1])]
                     line_str = ';'.join(line)
                     final_lines.append(line_str)
                     line_counter += 2
@@ -346,11 +328,11 @@ def fetch_finland_cases_age_weekly(logger, number_age_groups=9):
     new_cases_df = new_cases_df.fillna(0)
     logger.debug('Filled NaNs with zeros')
 
-    new_cases_df['val'] = new_cases_df['val'].astype('int32')
-
     age_group_mapping = REQUESTS['age_group_mappings'][number_age_groups]['age_group_mapping_cases']
     new_cases_df['age_group'] = new_cases_df.apply(lambda row: age_group_mapping[row['Age']], axis=1)
     logger.debug('Augmented data age groups')
+
+    new_cases_df = new_cases_df.astype({'val': 'int32'})
 
     cases_age = new_cases_df.groupby(by=['Time', 'age_group'], as_index=False).sum()
     logger.debug('Keeping only age groups')
@@ -380,8 +362,9 @@ def fetch_finland_cases_age_weekly(logger, number_age_groups=9):
                     age_i += 1
                     left_cases -= 1
 
-        # Getting the propostion of the age wrt total cases
-        cases_age_prop.loc[cases_age['Time'] == time, 'val'] = cases_age.loc[cases_age['Time'] == time, 'val'] / tot_val
+        if tot_val != 0:
+            # Getting the proportion of the age wrt total cases
+            cases_age_prop.loc[cases_age['Time'] == time, 'val'] = cases_age.loc[cases_age['Time'] == time, 'val'] / tot_val
 
     cases_age_prop = cases_age_prop.fillna(0)
     # Remove the column of total age counts
@@ -407,7 +390,7 @@ def construct_finland_age_cases_daily(logger, number_age_groups=9):
     for date in dates:
         cases_week = cases_list[np.where(cases_list[:, 0] == date)]
         cases_day = np.copy(cases_week)
-        cases_daily_vals = divide_equally_week_values(cases_day[:, 2])
+        cases_daily_vals = cases_day[:, 2]/7
 
         cases_week_prop = cases_prop_list[np.where(cases_prop_list[:, 0] == date)]
 
@@ -419,7 +402,7 @@ def construct_finland_age_cases_daily(logger, number_age_groups=9):
             line_day = [date_str, ]
             line_prop = [date_str, ]
             for i, age_i in enumerate(age_groups):
-                line_day.append(str(cases_daily_vals[i, day]))
+                line_day.append(str(cases_daily_vals[i]))
                 line_prop.append(str(cases_week_prop[i, 2]))
             line_str_day = ';'.join(line_day)
             line_str_prop = ';'.join(line_prop)
@@ -524,7 +507,8 @@ def compartment_values_daily(logger, erva_pop_file, filename=None,
         exposed_total[day_t, :] = infected_total[day_t+lat_period, :]
 
     # Getting the population to get the final Susceptibles
-    pop_ervas, _ = static_population_erva_age(logger, erva_pop_file)
+    pop_ervas, _ = static_population_erva_age(logger, erva_pop_file,
+                                              number_age_groups=number_age_groups)
     pop_ervas = pop_ervas[~pop_ervas['erva'].str.contains('All')]
     pop_ervas = pop_ervas.sort_values(['erva'])
     pop_ervas_npy = pop_ervas['Total'].values
@@ -571,8 +555,6 @@ def full_epidemic_state_finland(logger, erva_pop_file, filename=None,
                               how='left')
     # Merge will left missing values with NaNs. Filled them with 0
     epidemic_state = epidemic_state.fillna(0)
-    epidemic_state = epidemic_state.astype({'First dose': 'int32',
-                                            'Second dose': 'int32'})
 
     epidemic_state['First dose cumulative'] = epidemic_state.groupby(['erva', 'age'])['First dose'].cumsum()
     epidemic_state['Second dose cumulative'] = epidemic_state.groupby(['erva', 'age'])['Second dose'].cumsum()
