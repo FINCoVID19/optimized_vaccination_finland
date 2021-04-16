@@ -143,6 +143,8 @@ def construct_thl_vaccines_erva_daily(logger, filename=None):
     dates = np.unique(vaccinated_list[:, 1])
     ervas = np.unique(vaccinated_list[:, 0])
 
+    age_groups = pd.unique(vaccinated_weekly['age group'])
+
     header = 'date;erva;age;First dose;Second dose'
     final_lines = [header, ]
     for date in dates:
@@ -158,29 +160,16 @@ def construct_thl_vaccines_erva_daily(logger, filename=None):
             for day in range(7):
                 date_i = monday_of_week + datetime.timedelta(days=day)
                 date_str = date_i.strftime('%Y-%m-%d')
-                line = [date_str,
-                        erva,
-                        '0-14',
-                        str(vacc_day_vals[0, day]),
-                        str(vacc_day_vals[1, day])]
-                line_str = ';'.join(line)
-                final_lines.append(line_str)
-
-                line = [date_str,
-                        erva,
-                        '15-64',
-                        str(vacc_day_vals[2, day]),
-                        str(vacc_day_vals[3, day])]
-                line_str = ';'.join(line)
-                final_lines.append(line_str)
-
-                line = [date_str,
-                        erva,
-                        '65+',
-                        str(vacc_day_vals[4, day]),
-                        str(vacc_day_vals[5, day])]
-                line_str = ';'.join(line)
-                final_lines.append(line_str)
+                line_counter = 0
+                for age_g in age_groups:
+                    line = [date_str,
+                            erva,
+                            age_g,
+                            str(vacc_day_vals[line_counter, day]),
+                            str(vacc_day_vals[line_counter+1, day])]
+                    line_str = ';'.join(line)
+                    final_lines.append(line_str)
+                    line_counter += 2
 
     complete_csv = '\n'.join(final_lines)
 
@@ -325,6 +314,7 @@ def fetch_finland_cases_age_weekly(logger):
     cases_age = new_cases_df.groupby(by=['Time', 'age_group'], as_index=False).sum()
     logger.debug('Keeping only age groups')
 
+    age_groups = REQUESTS['age_groups']
     cases_age_prop = cases_age.copy()
     all_times = pd.unique(cases_age['Time'])
     for time in all_times:
@@ -337,9 +327,17 @@ def fetch_finland_cases_age_weekly(logger):
         if age_val != tot_val:
             missing_cases = tot_val - age_val
             logger.debug('%s. Missing: %d' % (time, missing_cases))
-            # Adding difference in missing to group 15-64
-            condition = (cases_age['Time'] == time) & (cases_age['age_group'] == '15-64')
-            cases_age.loc[condition, 'val'] += missing_cases
+            add_cases = np.floor(missing_cases / len(age_groups))
+            cases_age.loc[cases_age['Time'] == time, 'val'] += add_cases
+            left_cases = missing_cases % len(age_groups)
+            if left_cases != 0:
+                age_i = 0
+                while left_cases > 0:
+                    select_age_group = age_groups[age_i]
+                    condition = (cases_age['Time'] == time) & (cases_age['age_group'] == select_age_group)
+                    cases_age.loc[condition, 'val'] += 1
+                    age_i += 1
+                    left_cases -= 1
 
         # Getting the propostion of the age wrt total cases
         cases_age_prop.loc[cases_age['Time'] == time, 'val'] = cases_age.loc[cases_age['Time'] == time, 'val'] / tot_val
@@ -358,7 +356,10 @@ def construct_finland_age_cases_daily(logger):
     cases_prop_list = cases_prop.values
     dates = np.unique(cases_list[:, 0])
 
-    header = 'Time;0-14;15-64;65+'
+    age_groups = REQUESTS['age_groups']
+    header = 'Time'
+    for age_i in age_groups:
+        header += ';%s' % age_i
     final_lines_day = [header, ]
     final_lines_prop = [header, ]
     for date in dates:
@@ -373,14 +374,11 @@ def construct_finland_age_cases_daily(logger):
         for day in range(7):
             date_i = monday_of_week + datetime.timedelta(days=day)
             date_str = date_i.strftime('%Y-%m-%d')
-            line_day = [date_str,
-                        str(cases_daily_vals[0, day]),
-                        str(cases_daily_vals[1, day]),
-                        str(cases_daily_vals[2, day])]
-            line_prop = [date_str,
-                         str(cases_week_prop[0, 2]),
-                         str(cases_week_prop[1, 2]),
-                         str(cases_week_prop[2, 2])]
+            line_day = [date_str, ]
+            line_prop = [date_str, ]
+            for i, age_i in enumerate(age_groups):
+                line_day.append(str(cases_daily_vals[i, day]))
+                line_prop.append(str(cases_week_prop[i, 2]))
             line_str_day = ';'.join(line_day)
             line_str_prop = ';'.join(line_prop)
             final_lines_day.append(line_str_day)
@@ -412,12 +410,15 @@ def construct_cases_age_erva_daily(logger):
         cases_erva_date = cases_erva_date.values
         for cases_line in cases_erva_date:
             _, erva, cases = cases_line
-            sampled_cases_ages = np.random.multinomial(cases, probs)
+            cases_ages = cases*np.array(probs)
 
-            new_line = [time, erva, *sampled_cases_ages]
+            new_line = [time, erva, *cases_ages]
             cases_by_age_erva.append(new_line)
 
-    columns = ['Time', 'erva', '0-14', '15-64', '65+']
+    age_groups = REQUESTS['age_groups']
+    columns = ['Time', 'erva']
+    for age_i in age_groups:
+        columns.append(age_i)
     cases_by_age_erva = pd.DataFrame(data=cases_by_age_erva, columns=columns)
 
     return cases_by_age_erva
@@ -564,7 +565,7 @@ if __name__ == "__main__":
         # static_population_erva_age(logger, erva_pop_file)
 
         out_csv_filename = os.path.join(stats_dir, 'epidemic_finland.csv')
-        full_epidemic_state_finland(logger, erva_pop_file, out_csv_filename)
+        # full_epidemic_state_finland(logger, erva_pop_file, out_csv_filename)
 
         # out_csv_filename = os.path.join(stats_dir, 'erva_vaccinations.csv')
         # fetch_thl_vaccines_erva_weekly(logger, out_csv_filename)
@@ -577,6 +578,6 @@ if __name__ == "__main__":
 
         # fetch_thl_cases_erva_weekly(logger)
 
-        # construct_cases_age_erva_daily(logger)
+        construct_cases_age_erva_daily(logger)
     except Exception:
         logger.exception("Fatal error in main loop")
