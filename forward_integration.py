@@ -1,13 +1,13 @@
 import numpy as np
 import matplotlib as mlp
 import matplotlib.pyplot as plt
-import sys
 import pandas as pd
-from scipy.optimize import Bounds
-from scipy.optimize import minimize
-from scipy.optimize import minimize_scalar
-from scipy.optimize import linprog
 from datetime import datetime
+import logging
+from logging import handlers
+from fetch_data import (
+    static_population_erva_age,
+)
 
 
 def for_int(u_con, c1, beta, c_gh, T, pop_hat, age_er, t0='2021-04-19'):
@@ -84,32 +84,6 @@ def for_int(u_con, c1, beta, c_gh, T, pop_hat, age_er, t0='2021-04-19'):
     S_vg = np.zeros((N_g, N_p, N_t))
     S_xg = np.zeros((N_g, N_p, N_t))
 
-    # Force of infection in equation (4)
-    def force_of_inf(I_h, c_gh, k, N_g, N_p, mob, pop_hat):
-        fi = 0.0
-        for h in range(N_g):
-            for m in range(N_p):
-                for l in range(N_p):
-                    fi = fi + (mob[k, m]*mob[l, m]*I_h[h, l]*c_gh[h])
-
-        return fi
-
-    k = 1
-    foo_Ih = np.random.rand(N_g, N_p)
-    foo_mob = np.random.rand(N_p, N_p)
-    foo_c_gh = np.random.rand(N_g)
-    foo_force = force_of_inf(foo_Ih, foo_c_gh, k, N_g, N_p, foo_mob, 10)
-    print('foo_force')
-    print(foo_force)
-
-    foo_mob_k = foo_mob[k, :]
-    foo_mob_k = foo_mob_k[:, np.newaxis]
-    foo_c_gh_n = foo_c_gh[np.newaxis, :]
-    foo_fi = foo_c_gh_n@foo_Ih@(foo_mob@foo_mob_k)
-    lambda_g_foo = foo_fi.item()
-    print(lambda_g_foo)
-    print(np.allclose(lambda_g_foo, foo_force))
-
     # I store the values for the force of infection (needed for the adjoint equations)
     L_g = np.zeros((N_g, N_p, N_t))
     # Cummulative number for all age groups and all ervas
@@ -117,47 +91,55 @@ def for_int(u_con, c1, beta, c_gh, T, pop_hat, age_er, t0='2021-04-19'):
 
     # Vaccination rate which we set v_{kg}(t) = n_max_{kg}(t)/S_{kg}(t)
     # In equation (1), where n_max_{kg}(t) is the maximum number of daily vaccines
-    u = u_con
+    pop_erva = age_er.sum(axis=1)
+    pop_erva_prop = pop_erva/np.sum(pop_erva)
+    u_erva = u_con*pop_erva_prop
 
-    # u(t) is n_max_{kg} in my code
-    # u = np.zeros((N_g,N_p,N_t))
+    u = np.zeros((N_g, N_p, N_t))
 
     # Forward integration for system of equations (1)
     for j in range(N_t-1):
         D = 0.0
-        for g in range(N_g-1):
-            for n in range(N_p):
-                # lambda_g = force_of_inf(I_g[:,:,j],c_gh[:,g],n,N_g,N_p,c1,pop_hat)
+        for n in range(N_p):
+            age_group_indicator = N_g-1
+            for g in range(N_g-1, -1, -1):
                 I_h_force = I_g[:, :, j]
                 c_gh_force = c_gh[:, g]
                 c_gh_force = c_gh_force[np.newaxis, :]
                 mob_k = c1[n, :]
                 mob_k = mob_k[:, np.newaxis]
 
+                # Force of infection in equation (4)
                 lambda_g = c_gh_force@I_h_force@(c1@mob_k)
-                # print(np.allclose(lambda_g_matrix, lambda_g))
-                L_g[g,n,j] = lambda_g
+                L_g[g, n, j] = lambda_g
+
+                if S_g[g, n, j] - beta*lambda_g*S_g[g, n, j] <= 0:
+                    age_group_indicator = age_group_indicator - 1
+
+                if age_group_indicator == g:
+                    u[g, n, j] = u_erva[n]/age_er[n, g]
 
                 #u[g,n,j] = w1 n(k,r)/n(r) + w2 I_g[g,n,j]/number of infectious in finalnd + w3 (H_wg[g,n,j] + +)/number of finland
-                u[g,n,j] = min(u[g,n,j], max(0.0,S_g[g,n,j] - beta*lambda_g*S_g[g,n,j])) # ensures that we do not keep vaccinating after there are no susceptibles left
-                S_g[g,n,j+1] = S_g[g,n,j] - beta*lambda_g*S_g[g,n,j] - u[g,n,j]
-                S_vg[g,n,j+1] = S_vg[g,n,j] - beta*lambda_g*S_vg[g,n,j] + u[g,n,j] - T_V*S_vg[g,n,j]
-                S_xg[g,n,j+1] = S_xg[g,n,j] - beta*lambda_g*S_xg[g,n,j] + (1.-alpha*e)*T_V*S_vg[g,n,j]
-                V_g[g,n,j+1] = V_g[g,n,j] + alpha*e*T_V*S_vg[g,n,j]
-                E_g[g,n,j+1] = E_g[g,n,j] + beta*lambda_g*(S_g[g,n,j]+S_vg[g,n,j] +S_xg[g,n,j] ) - T_E*E_g[g,n,j]
-                I_g[g,n,j+1] = I_g[g,n,j] + T_E*E_g[g,n,j]- T_I*I_g[g,n,j]
-                Q_0g[g,n,j+1] = Q_0g[g,n,j] +  (1.-p_H[g])*T_I*I_g[g,n,j] - T_q0*Q_0g[g,n,j]
-                Q_1g[g,n,j+1] = Q_1g[g,n,j] +  p_H[g]*T_I*I_g[g,n,j] - T_q1*Q_1g[g,n,j]
-                H_wg[g,n,j+1] = H_wg[g,n,j] +  T_q1*Q_1g[g,n,j] - T_hw*H_wg[g,n,j]
-                H_cg[g,n,j+1] = H_cg[g,n,j] +   p_c[g]*T_hw*H_wg[g,n,j] - T_hc*H_cg[g,n,j]
-                H_rg[g,n,j+1] = H_rg[g,n,j] +   (1.-mu_c[g])*T_hc*H_cg[g,n,j] - T_hr*H_rg[g,n,j]   
-                R_g[g,n,j+1] = R_g[g,n,j] + T_hr*H_rg[g,n,j] + (1.-mu_w[g])*(1.-p_c[g])*T_hw*H_wg[g,n,j] + (1.-mu_q[g])*T_q0*Q_0g[g,n,j]
-                D_g[g,n,j+1] = D_g[g,n,j] + mu_q[g]*T_q0*Q_0g[g,n,j]+mu_w[g]*(1.-p_c[g])*T_hw*H_wg[g,n,j]  + mu_c[g]*T_hc*H_cg[g,n,j]  
+                # Ensures that we do not keep vaccinating after there are no susceptibles left
+                u[g, n, j] = min(u[g, n, j], max(0.0, S_g[g, n, j] - beta*lambda_g*S_g[g, n, j]))
+                S_g[g, n, j+1] = S_g[g, n, j] - beta*lambda_g*S_g[g, n, j] - u[g, n, j]
+                S_vg[g, n, j+1] = S_vg[g, n, j] - beta*lambda_g*S_vg[g, n, j] + u[g, n, j] - T_V*S_vg[g, n, j]
+                S_xg[g, n, j+1] = S_xg[g, n, j] - beta*lambda_g*S_xg[g, n, j] + (1.-alpha*e)*T_V*S_vg[g, n, j]
+                V_g[g, n, j+1] = V_g[g, n, j] + alpha*e*T_V*S_vg[g, n, j]
+                E_g[g, n, j+1] = E_g[g, n, j] + beta*lambda_g*(S_g[g, n, j]+S_vg[g, n, j] +S_xg[g, n, j] ) - T_E*E_g[g, n, j]
+                I_g[g, n, j+1] = I_g[g, n, j] + T_E*E_g[g, n, j]- T_I*I_g[g, n, j]
+                Q_0g[g, n, j+1] = Q_0g[g, n, j] + (1.-p_H[g])*T_I*I_g[g, n, j] - T_q0*Q_0g[g, n, j]
+                Q_1g[g, n, j+1] = Q_1g[g, n, j] + p_H[g]*T_I*I_g[g, n, j] - T_q1*Q_1g[g, n, j]
+                H_wg[g, n, j+1] = H_wg[g, n, j] + T_q1*Q_1g[g, n, j] - T_hw*H_wg[g, n, j]
+                H_cg[g, n, j+1] = H_cg[g, n, j] + p_c[g]*T_hw*H_wg[g, n, j] - T_hc*H_cg[g, n, j]
+                H_rg[g, n, j+1] = H_rg[g, n, j] + (1.-mu_c[g])*T_hc*H_cg[g, n, j] - T_hr*H_rg[g, n, j]   
+                R_g[g, n, j+1] = R_g[g, n, j] + T_hr*H_rg[g, n, j] + (1.-mu_w[g])*(1.-p_c[g])*T_hw*H_wg[g, n, j] + (1.-mu_q[g])*T_q0*Q_0g[g, n, j]
+                D_g[g, n, j+1] = D_g[g, n, j] + mu_q[g]*T_q0*Q_0g[g, n, j]+mu_w[g]*(1.-p_c[g])*T_hw*H_wg[g, n, j]  + mu_c[g]*T_hc*H_cg[g, n, j]  
 
-                D = D +  D_g[g,n,j+1]*age_er[n,g]
+                D = D + D_g[g, n, j+1]*age_er[n, g]
         D_d[j] = D
 
-    return S_g, S_vg, S_xg, L_g,  D_d
+    return S_g, S_vg, S_xg, L_g, D_d, D_g, u
 
 # Contact matrix
 c_gh_3 = np.array(([[1.3,0.31,0.23,1.07,0.51,0.16,0.14,0.09],
@@ -169,33 +151,36 @@ c_gh_3 = np.array(([[1.3,0.31,0.23,1.07,0.51,0.16,0.14,0.09],
 [0.11,0.04,0.17,0.24,0.22,0.25,0.59,0.28],
 [0.06,0.03,0.05,0.1,0.13,0.13,0.23,0.55]]))
 
-#age structure in each erva
-age_hus = np.array([221613, 238313, 272674, 316173, 285988, 289128, 256006,127118 + 191169])
-age_tur = np.array([ 82812,  93001, 103572 ,106093 ,101979, 111874, 113383,59855+96435])
-age_tam = np.array([ 88071, 100864, 105275, 112809, 106951, 115157, 117896,60735+94923])
-age_kuop = np.array([ 71910 , 84213  ,92466 , 91390 , 85302, 103387, 119723, 58102+90741])
-age_oul = np.array([ 80308,  91471,  84511  ,88448  ,82348 , 91225, 100322, 46440+71490])
+logger = logging.getLogger()
+erva_pop_file = 'stats/erva_population_age_2020.csv'
+number_age_groups = 8
+num_ervas = 5
+pop_ervas_age, _ = static_population_erva_age(logger, erva_pop_file,
+                                              number_age_groups=number_age_groups)
+pop_ervas_age = pop_ervas_age[~pop_ervas_age['erva'].str.contains('All')]
+pop_ervas_age = pop_ervas_age[~pop_ervas_age['erva'].str.contains('land')]
+pop_ervas_age = pop_ervas_age.sort_values(['erva', 'age_group'])
+pop_ervas_npy = pop_ervas_age['Total'].values
+pop_ervas_npy = pop_ervas_npy.reshape(num_ervas, number_age_groups)
 
-age_er = np.array([age_hus, age_tur, age_tam, age_kuop,age_oul])
-age_er_pop = np.array([age_hus, age_kuop, age_oul, age_tam, age_tur])
-###########################################################################################
+ervas_order = ['HYKS', 'TYKS', 'TAYS', 'KYS', 'OYS']
+ervas_df = list(pd.unique(pop_ervas_age['erva']))
+ervas_pd_order = [ervas_df.index(erva) for erva in ervas_order]
+# Rearrange rows in the correct order
+age_er = pop_ervas_npy[ervas_pd_order, :]
 
-pop_erva = np.array([2198182, 797234,902681, 869004 , 736563]) 
+pop_erva = age_er.sum(axis=1)
 
-##################################################################
-#mobility matrix
+# Mobility matrix
+m_av = np.array(
+            [[1389016, 7688, 16710, 7789, 1774],
+            [11316, 518173, 14139, 562, 2870],
+            [22928, 12404, 511506, 4360, 1675],
+            [8990, 365, 4557, 459867, 3286],
+            [1798, 2417, 1592, 3360, 407636]]
+       )
 
-m_av = np.array([[1389016, 7688, 16710,778, 1774],
-[11316,518173,14139, 562, 2870],
-[22928, 12404, 511506, 4360, 1675],
-[8990,365 , 4557, 459867, 3286 ],
-[1798, 2417, 1592, 3360, 407 ]])
-
-m_av[:,0] = m_av[:,0]/pop_erva[0]
-m_av[:,1] = m_av[:,1]/pop_erva[1]
-m_av[:,2] = m_av[:,2]/pop_erva[2] 
-m_av[:,3] = m_av[:,3]/pop_erva[3] 
-m_av[:,4] = m_av[:,4]/pop_erva[4]
+m_av = m_av/pop_erva[:, np.newaxis]
 
 N_p = 5
 Ng = 8
@@ -218,7 +203,7 @@ for m in range(N_p):
     for k in range(N_p):
         m_k = m_k + pop_erva[k]*mob_av[k,m]
         for g in range(Ng):
-            age_er_hat[g,m] = sum(age_er[:,g]*mob_av[:,m])
+            age_er_hat[g, m] = sum(age_er[:, g]*mob_av[:, m])
 
     pop_erva_hat[m] = m_k
 
@@ -227,7 +212,7 @@ for m in range(N_p):
 age_pop = sum(age_er)
 
 # Computing beta_gh for force of infection ()
-beta_gh = np.zeros((Ng,Ng))
+beta_gh = np.zeros((Ng, Ng))
 
 for g in range(Ng):
     for h in range(Ng):
@@ -235,12 +220,12 @@ for g in range(Ng):
             for m in range(N_p):
                 sum_kg2 = 0.0
                 for k in range(N_p):
-                    sum_kg2 = sum_kg2 + age_er[k,g]*mob_av[k,m]*mob_av[k,m]/pop_erva_hat[m]
-            sum_kg = sum(age_er_hat[g,:]*age_er_hat[h,:]/pop_erva_hat)
-            beta_gh[g,h] = age_pop[g]*c_gh_3[g,h]/(sum_kg-sum_kg2)
+                    sum_kg2 = sum_kg2 + age_er[k, g]*mob_av[k, m]*mob_av[k, m]/pop_erva_hat[m]
+            sum_kg = sum(age_er_hat[g, :]*age_er_hat[h, :]/pop_erva_hat)
+            beta_gh[g, h] = age_pop[g]*c_gh_3[g, h]/(sum_kg-sum_kg2)
         else:
-            sum_kg = age_er_hat[g,:]*age_er_hat[h,:]
-            beta_gh[g,h] = age_pop[g]*c_gh_3[g,h]/(sum(sum_kg/pop_erva_hat))
+            sum_kg = age_er_hat[g, :]*age_er_hat[h, :]
+            beta_gh[g, h] = age_pop[g]*c_gh_3[g, h]/(sum(sum_kg/pop_erva_hat))
 
 ######################################################################################
 # number of ervas
@@ -252,12 +237,9 @@ N_f = (Ng-3)*N_p
 T = 90
 # transmission parameter
 beta = 0.02
-u = np.zeros((Ng, N_p, T))
+# Number of vaccines per day
+u = 30000
 
 time = np.arange(0, T)
 
-#
-
-Sg, Svg, Sxg, Lg, Dg = for_int(u, mob_av,beta,beta_gh,T,pop_erva_hat, age_er_pop)  
-
-print(5)
+Sg, Svg, Sxg, Lg, D_d, D_g = for_int(u, mob_av, beta, beta_gh, T, pop_erva_hat, age_er)

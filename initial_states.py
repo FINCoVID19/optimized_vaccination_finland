@@ -15,7 +15,7 @@ def compartment_values_daily(logger, erva_pop_file, filename=None,
     cases_by_age_erva = construct_cases_age_erva_daily(logger,
                                                        number_age_groups=number_age_groups)
 
-    hosp_by_erva = fetch_hs_hospitalizations(logger)
+    # hosp_by_erva = fetch_hs_hospitalizations(logger)
 
     cases_by_age_erva.sort_values(['Time', 'erva'])
     dates = pd.unique(cases_by_age_erva['Time'])
