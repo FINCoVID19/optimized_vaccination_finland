@@ -5,7 +5,7 @@ import pandas as pd
 import numpy as np
 from fetch_data import (
     construct_cases_age_erva_daily, static_population_erva_age,
-    construct_thl_vaccines_erva_daily
+    construct_thl_vaccines_erva_daily, fetch_hs_hospitalizations
 )
 
 
@@ -14,6 +14,8 @@ def compartment_values_daily(logger, erva_pop_file, filename=None,
                              number_age_groups=9):
     cases_by_age_erva = construct_cases_age_erva_daily(logger,
                                                        number_age_groups=number_age_groups)
+
+    hosp_by_erva = fetch_hs_hospitalizations(logger)
 
     cases_by_age_erva.sort_values(['Time', 'erva'])
     dates = pd.unique(cases_by_age_erva['Time'])

@@ -4,7 +4,7 @@ from io import StringIO
 import pandas as pd
 import numpy as np
 import datetime
-from env_var import REQUESTS
+from env_var import REQUESTS, MAPPINGS
 
 
 def transform_thl_week_datetime(thl_time):
@@ -44,7 +44,7 @@ def static_population_erva_age(logger, csv_file, number_age_groups=9):
 
     population_age_df = population_age_df[~population_age_df['Age'].str.contains('Total')]
 
-    age_group_mapping = REQUESTS['age_group_mappings'][number_age_groups]['age_groups_mapping_population']
+    age_group_mapping = MAPPINGS['age_groups'][number_age_groups]['population']
     population_age_df['age_group'] = population_age_df.apply(lambda row: age_group_mapping[row['Age']], axis=1)
     population_age_df = population_age_df.groupby(by=['erva', 'age_group'],
                                                   as_index=False).sum()
@@ -87,11 +87,11 @@ def fetch_thl_vaccines_erva_weekly(logger, filename=None, number_age_groups=9):
     vaccinated_df = vaccinated_df.fillna(0)
     logger.debug('Filled NaNs with zeros')
 
-    hcd_erva_mapping = REQUESTS['hcd_erva_mapping']
+    hcd_erva_mapping = MAPPINGS['hcd_erva']
     vaccinated_df['erva'] = vaccinated_df.apply(lambda row: hcd_erva_mapping[row['Area']], axis=1)
     logger.debug('Augmented data with erva')
 
-    age_group_mapping = REQUESTS['age_group_mappings'][number_age_groups]['age_group_mapping']
+    age_group_mapping = MAPPINGS['age_groups'][number_age_groups]['vaccines']
     vaccinated_df['age group'] = vaccinated_df.apply(lambda row: age_group_mapping[row['Age']], axis=1)
     logger.debug('Augmented data with age groups')
 
@@ -153,6 +153,12 @@ def fetch_hs_hospitalizations(logger):
     hospital_df = hospital_df.sort_values(['date', 'erva'])
 
     return hospital_df
+
+
+def construct_hs_hosp_age_erva(logger):
+    logger.debug('Constructing hospitalizations by age and erva')
+
+    hosp_by_erva = fetch_hs_hospitalizations(logger)
 
 
 def construct_thl_vaccines_erva_daily(logger, filename=None, number_age_groups=9):
@@ -239,7 +245,7 @@ def fetch_thl_cases_erva_daily(logger):
     new_cases_df = new_cases_df.drop(columns=['Measure'])
     logger.debug('Removed unecessary Measure column')
 
-    hcd_erva_mapping = REQUESTS['hcd_erva_mapping']
+    hcd_erva_mapping = MAPPINGS['hcd_erva']
     new_cases_df['erva'] = new_cases_df.apply(lambda row: hcd_erva_mapping[row['Area']], axis=1)
     logger.debug('Augmented data with erva')
 
@@ -281,7 +287,7 @@ def fetch_thl_cases_erva_weekly(logger):
     new_cases_df = new_cases_df.fillna(0)
     logger.debug('Filled NaNs with zeros')
 
-    hcd_erva_mapping = REQUESTS['hcd_erva_mapping']
+    hcd_erva_mapping = MAPPINGS['hcd_erva']
     new_cases_df['erva'] = new_cases_df.apply(lambda row: hcd_erva_mapping[row['Area']], axis=1)
     logger.debug('Augmented data with erva')
 
@@ -325,7 +331,7 @@ def fetch_finland_cases_age_weekly(logger, number_age_groups=9):
     new_cases_df = new_cases_df.fillna(0)
     logger.debug('Filled NaNs with zeros')
 
-    age_group_mapping = REQUESTS['age_group_mappings'][number_age_groups]['age_group_mapping_cases']
+    age_group_mapping = MAPPINGS['age_groups'][number_age_groups]['cases']
     new_cases_df['age_group'] = new_cases_df.apply(lambda row: age_group_mapping[row['Age']], axis=1)
     logger.debug('Augmented data age groups')
 
@@ -334,7 +340,7 @@ def fetch_finland_cases_age_weekly(logger, number_age_groups=9):
     cases_age = new_cases_df.groupby(by=['Time', 'age_group'], as_index=False).sum()
     logger.debug('Keeping only age groups')
 
-    age_groups = REQUESTS['age_group_mappings'][number_age_groups]['age_groups']
+    age_groups = MAPPINGS['age_groups'][number_age_groups]['names']
     cases_age_prop = cases_age.copy()
     all_times = pd.unique(cases_age['Time'])
     for time in all_times:
@@ -378,7 +384,7 @@ def construct_finland_age_cases_daily(logger, number_age_groups=9):
     cases_prop_list = cases_prop.values
     dates = np.unique(cases_list[:, 0])
 
-    age_groups = REQUESTS['age_group_mappings'][number_age_groups]['age_groups']
+    age_groups = MAPPINGS['age_groups'][number_age_groups]['names']
     header = 'Time'
     for age_i in age_groups:
         header += ';%s' % age_i
@@ -438,7 +444,7 @@ def construct_cases_age_erva_daily(logger, number_age_groups=9):
             new_line = [time, erva, *cases_ages]
             cases_by_age_erva.append(new_line)
 
-    age_groups = REQUESTS['age_group_mappings'][number_age_groups]['age_groups']
+    age_groups = MAPPINGS['age_groups'][number_age_groups]['names']
     columns = ['Time', 'erva']
     for age_i in age_groups:
         columns.append(age_i)
