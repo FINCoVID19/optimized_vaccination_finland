@@ -10,7 +10,7 @@ from fetch_data import (
 )
 
 
-def for_int(u_con, c1, beta, c_gh, T, pop_hat, age_er, t0='2021-04-19'):
+def for_int(u_con, c1, beta, c_gh, T, pop_hat, age_er, t0='2021-04-19', policy_thl=False):
     ####################################################################
     # Time periods for epidemic
     T_E = 1./3.
@@ -93,13 +93,26 @@ def for_int(u_con, c1, beta, c_gh, T, pop_hat, age_er, t0='2021-04-19'):
     # In equation (1), where n_max_{kg}(t) is the maximum number of daily vaccines
     pop_erva = age_er.sum(axis=1)
     pop_erva_prop = pop_erva/np.sum(pop_erva)
-    u_erva = u_con*pop_erva_prop
+    if policy_thl:
+        ws_vacc = [1/3, 1/3, 1/3]
+    else:
+        ws_vacc = [1, 0, 0]
 
     u = np.zeros((N_g, N_p, N_t))
 
     # Forward integration for system of equations (1)
     for j in range(N_t-1):
         D = 0.0
+        hosp_t = H_wg[:, :, j] + H_cg[:, :, j] + H_rg[:, :, j]
+        i_t = I_g[:, :, j]
+        print('hosp_t')
+        print(hosp_t.shape)
+        print('i_t')
+        print(i_t.shape)
+        if policy_thl:
+            pass
+        else:
+            u_erva = u_con*pop_erva_prop
         for n in range(N_p):
             age_group_indicator = N_g-1
             for g in range(N_g-1, -1, -1):
