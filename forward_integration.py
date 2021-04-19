@@ -127,15 +127,15 @@ def for_int(u_con, c1, beta, c_gh, T, pop_hat, age_er, t0='2021-04-19'):
         D = 0.0
         for g in range(N_g-1):
             for n in range(N_p):
-                lambda_g = force_of_inf(I_g[:,:,j],c_gh[:,g],n,N_g,N_p,c1,pop_hat)
+                # lambda_g = force_of_inf(I_g[:,:,j],c_gh[:,g],n,N_g,N_p,c1,pop_hat)
                 I_h_force = I_g[:, :, j]
                 c_gh_force = c_gh[:, g]
                 c_gh_force = c_gh_force[np.newaxis, :]
                 mob_k = c1[n, :]
                 mob_k = mob_k[:, np.newaxis]
 
-                lambda_g_matrix = c_gh_force@I_h_force@(c1@mob_k)
-                print(np.allclose(lambda_g_matrix, lambda_g))
+                lambda_g = c_gh_force@I_h_force@(c1@mob_k)
+                # print(np.allclose(lambda_g_matrix, lambda_g))
                 L_g[g,n,j] = lambda_g
 
                 #u[g,n,j] = w1 n(k,r)/n(r) + w2 I_g[g,n,j]/number of infectious in finalnd + w3 (H_wg[g,n,j] + +)/number of finland
