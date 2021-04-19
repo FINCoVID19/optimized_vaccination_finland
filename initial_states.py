@@ -71,7 +71,7 @@ def compartment_values_daily(logger, erva_pop_file, filename=None,
     pop_ervas, _ = static_population_erva_age(logger, erva_pop_file,
                                               number_age_groups=number_age_groups)
     pop_ervas = pop_ervas[~pop_ervas['erva'].str.contains('All')]
-    pop_ervas = pop_ervas.sort_values(['erva'])
+    pop_ervas = pop_ervas.sort_values(['erva', 'age_group'])
     pop_ervas_npy = pop_ervas['Total'].values
     pop_ervas_npy = pop_ervas_npy.reshape(num_ervas, ages)
 
