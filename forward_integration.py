@@ -161,15 +161,15 @@ def forward_integration(u_con, c1, beta, c_gh, T, pop_hat, age_er, t0='2021-04-1
                 S_vg[g, n, j+1] = S_vg[g, n, j] - beta*lambda_g*S_vg[g, n, j] + u[g, n, j] - T_V*S_vg[g, n, j]
                 S_xg[g, n, j+1] = S_xg[g, n, j] - beta*lambda_g*S_xg[g, n, j] + (1.-alpha*e)*T_V*S_vg[g, n, j]
                 V_g[g, n, j+1] = V_g[g, n, j] + alpha*e*T_V*S_vg[g, n, j]
-                E_g[g, n, j+1] = E_g[g, n, j] + beta*lambda_g*(S_g[g, n, j]+S_vg[g, n, j] +S_xg[g, n, j] ) - T_E*E_g[g, n, j]
-                I_g[g, n, j+1] = I_g[g, n, j] + T_E*E_g[g, n, j]- T_I*I_g[g, n, j]
+                E_g[g, n, j+1] = E_g[g, n, j] + beta*lambda_g*(S_g[g, n, j]+S_vg[g, n, j] + S_xg[g, n, j]) - T_E*E_g[g, n, j]
+                I_g[g, n, j+1] = I_g[g, n, j] + T_E*E_g[g, n, j] - T_I*I_g[g, n, j]
                 Q_0g[g, n, j+1] = Q_0g[g, n, j] + (1.-p_H[g])*T_I*I_g[g, n, j] - T_q0*Q_0g[g, n, j]
                 Q_1g[g, n, j+1] = Q_1g[g, n, j] + p_H[g]*T_I*I_g[g, n, j] - T_q1*Q_1g[g, n, j]
                 H_wg[g, n, j+1] = H_wg[g, n, j] + T_q1*Q_1g[g, n, j] - T_hw*H_wg[g, n, j]
                 H_cg[g, n, j+1] = H_cg[g, n, j] + p_c[g]*T_hw*H_wg[g, n, j] - T_hc*H_cg[g, n, j]
-                H_rg[g, n, j+1] = H_rg[g, n, j] + (1.-mu_c[g])*T_hc*H_cg[g, n, j] - T_hr*H_rg[g, n, j]   
+                H_rg[g, n, j+1] = H_rg[g, n, j] + (1.-mu_c[g])*T_hc*H_cg[g, n, j] - T_hr*H_rg[g, n, j]
                 R_g[g, n, j+1] = R_g[g, n, j] + T_hr*H_rg[g, n, j] + (1.-mu_w[g])*(1.-p_c[g])*T_hw*H_wg[g, n, j] + (1.-mu_q[g])*T_q0*Q_0g[g, n, j]
-                D_g[g, n, j+1] = D_g[g, n, j] + mu_q[g]*T_q0*Q_0g[g, n, j]+mu_w[g]*(1.-p_c[g])*T_hw*H_wg[g, n, j]  + mu_c[g]*T_hc*H_cg[g, n, j]  
+                D_g[g, n, j+1] = D_g[g, n, j] + mu_q[g]*T_q0*Q_0g[g, n, j]+mu_w[g]*(1.-p_c[g])*T_hw*H_wg[g, n, j] + mu_c[g]*T_hc*H_cg[g, n, j]
 
                 D = D + D_g[g, n, j+1]*age_er[n, g]
         D_d[j] = D
@@ -215,7 +215,8 @@ def get_model_parameters(number_age_groups, num_ervas, erva_pop_file):
                 mob_av[k, m] = r*m_av[k, m]
 
     ####################################################################
-    # Equation (3) in overleaf (change in population size because of mobility) N_hat_{lg}, N_hat_{l}
+    # Equation (3) in overleaf (change in population size because of mobility)
+    # N_hat_{lg}, N_hat_{l}
     pop_erva_hat = np.zeros(N_p)
     age_er_hat = np.zeros((N_g, N_p))
 
