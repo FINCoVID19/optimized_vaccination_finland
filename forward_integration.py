@@ -1,45 +1,42 @@
 import numpy as np
-import matplotlib as mlp
-import matplotlib.pyplot as plt
 import pandas as pd
-from datetime import datetime
 import logging
-from logging import handlers
 from fetch_data import (
     static_population_erva_age,
 )
+from env_var import EPIDEMIC
 
 
 def forward_integration(u_con, c1, beta, c_gh, T, pop_hat, age_er, t0='2021-04-19', policy_thl=False):
+    # number of age groups and ervas
+    num_ervas, num_age_groups = age_er.shape
+    N_t = T
+    N_p = num_ervas
+    N_g = num_age_groups
+
     ####################################################################
     # Time periods for epidemic
-    T_E = 1./3.
-    T_V = 1./10.
-    T_I = 1./4.
-    T_q0 = 1./5.
-    T_q1 = 1./3.
-    T_hw = 1./5.
-    T_hc = 1./9.
-    T_hr = 1.
+    T_E = EPIDEMIC['T_E']
+    T_V = EPIDEMIC['T_V']
+    T_I = EPIDEMIC['T_I']
+    T_q0 = EPIDEMIC['T_q0']
+    T_q1 = EPIDEMIC['T_q1']
+    T_hw = EPIDEMIC['T_hw']
+    T_hc = EPIDEMIC['T_hc']
+    T_hr = EPIDEMIC['T_hr']
 
     # Fraction of nonhospitalized that dies
-    mu_q = np.array([0, 0., 0, 0., 0, 0., 0.0, 0.1])
+    mu_q = EPIDEMIC['mu_q'][num_age_groups]
     # Fraction of hospitalized that dies
-    mu_w = np.array([0.0, 0.0, 0.00, 0.0, 0.0, 0.0, 0.0, 0.3])
+    mu_w = EPIDEMIC['mu_w'][num_age_groups]
     # Fraction of inds. In critical care that dies
-    mu_c = np.array([0.3, 0.1, 0.1, 0.15, 0.15, 0.22, 0.46, 0.5])
+    mu_c = EPIDEMIC['mu_c'][num_age_groups]
     # Fraction of infected needing health care
-    p_H = np.array([0, 0, 0.02, 0.03, 0.04, 0.08, 0.16, 0.45])
+    p_H = EPIDEMIC['p_H'][num_age_groups]
     # Fraction of hospitalized needing critical care
-    p_c = np.array([0, 0, 0, 0, 0, 0.01, 0.03, 0.07])
-    alpha = 0.9
-    e = 0.95
-
-    # number of age groups
-    N_g = 8
-    # number of ervas
-    N_p = 5
-    N_t = T
+    p_c = EPIDEMIC['p_c'][num_age_groups]
+    alpha = EPIDEMIC['alpha']
+    e = EPIDEMIC['e']
 
     # Reading CSV
     epidemic_csv = pd.read_csv('out/epidemic_finland_8.csv')
@@ -49,7 +46,7 @@ def forward_integration(u_con, c1, beta, c_gh, T, pop_hat, age_er, t0='2021-04-1
     epidemic_zero = epidemic_zero[~epidemic_zero['erva'].str.contains('land')]
 
     # Getting the order the ervas have inside the dataframe
-    ervas_order = ['HYKS', 'TYKS', 'TAYS', 'KYS', 'OYS']
+    ervas_order = EPIDEMIC['ervas_order']
     ervas_df = list(pd.unique(epidemic_zero['erva']))
     ervas_pd_order = [ervas_df.index(erva) for erva in ervas_order]
 
@@ -98,18 +95,19 @@ def forward_integration(u_con, c1, beta, c_gh, T, pop_hat, age_er, t0='2021-04-1
     # Cummulative number for all age groups and all ervas
     D_d = np.zeros(N_t)
 
-    # Vaccination rate which we set v_{kg}(t) = n_max_{kg}(t)/S_{kg}(t)
-    # In equation (1), where n_max_{kg}(t) is the maximum number of daily vaccines
     pop_erva = age_er.sum(axis=1)
     # Proportional population of the ERVA
     pop_erva_prop = pop_erva/np.sum(pop_erva)
     # Initializing all group indicators in the last group
     age_group_indicators = np.array([N_g-1]*N_p)
-    delay_check_vacc = 14
-    ws_vacc = [1/3, 1/3, 1/3]
+    delay_check_vacc = EPIDEMIC['delay_check_vacc']
+    ws_vacc = EPIDEMIC['ws_vacc']
 
+    # Initialize vaccination rate
     u = np.zeros((N_g, N_p, N_t))
 
+    # Short method to get the normalized metric (infectious or hospitalized)
+    # In the lat t-delay period
     def get_metric_erva_weigth(metric, t, delay):
         tot_delay = t - delay
         if tot_delay < 0:
@@ -130,6 +128,7 @@ def forward_integration(u_con, c1, beta, c_gh, T, pop_hat, age_er, t0='2021-04-1
     # Forward integration for system of equations (1)
     for j in range(N_t-1):
         D = 0.0
+        # Deciding which policy to use
         if policy_thl:
             hosp_norm, hosp = get_metric_erva_weigth(H_wg+H_cg+H_rg, j, delay_check_vacc)
             infe_norm, infe = get_metric_erva_weigth(I_g, j, delay_check_vacc)
@@ -156,7 +155,6 @@ def forward_integration(u_con, c1, beta, c_gh, T, pop_hat, age_er, t0='2021-04-1
                 if age_group_indicator == g:
                     u[g, n, j] = u_erva[n]/age_er[n, g]
 
-                #u[g,n,j] = w1 n(k,r)/n(r) + w2 I_g[g,n,j]/number of infectious in finalnd + w3 (H_wg[g,n,j] + +)/number of finland
                 # Ensures that we do not keep vaccinating after there are no susceptibles left
                 u[g, n, j] = min(u[g, n, j], max(0.0, S_g[g, n, j] - beta*lambda_g*S_g[g, n, j]))
                 S_g[g, n, j+1] = S_g[g, n, j] - beta*lambda_g*S_g[g, n, j] - u[g, n, j]
@@ -179,21 +177,8 @@ def forward_integration(u_con, c1, beta, c_gh, T, pop_hat, age_er, t0='2021-04-1
     return S_g, S_vg, S_xg, L_g, D_d, D_g, u
 
 
-if __name__ == "__main__":
-    # Contact matrix
-    c_gh_3 = np.array(([[1.3,0.31,0.23,1.07,0.51,0.16,0.14,0.09],
-    [0.28,1.39,0.21,0.16,0.87,0.44,0.05,0.04],
-    [0.19,0.19,0.83,0.26,0.25,0.42,0.18,0.06],
-    [0.85,0.14,0.25,0.89,0.33,0.31,0.24,0.12],
-    [0.43,0.8,0.26,0.36,0.72,0.49,0.24,0.17],
-    [0.12,0.37,0.39,0.3,0.44,0.79,0.25,0.16],
-    [0.11,0.04,0.17,0.24,0.22,0.25,0.59,0.28],
-    [0.06,0.03,0.05,0.1,0.13,0.13,0.23,0.55]]))
-
+def get_model_parameters(number_age_groups, num_ervas, erva_pop_file):
     logger = logging.getLogger()
-    erva_pop_file = 'stats/erva_population_age_2020.csv'
-    number_age_groups = 8
-    num_ervas = 5
     pop_ervas_age, _ = static_population_erva_age(logger, erva_pop_file,
                                                   number_age_groups=number_age_groups)
     pop_ervas_age = pop_ervas_age[~pop_ervas_age['erva'].str.contains('All')]
@@ -210,38 +195,35 @@ if __name__ == "__main__":
 
     pop_erva = age_er.sum(axis=1)
 
+    # Contact matrix
+    c_gh_3 = EPIDEMIC['contact_matrix'][number_age_groups]
+
     # Mobility matrix
-    m_av = np.array(
-                [[1389016, 7688, 16710, 7789, 1774],
-                [11316, 518173, 14139, 562, 2870],
-                [22928, 12404, 511506, 4360, 1675],
-                [8990, 365, 4557, 459867, 3286],
-                [1798, 2417, 1592, 3360, 407636]]
-           )
+    m_av = EPIDEMIC['mobility_matrix'][number_age_groups]
 
     m_av = m_av/pop_erva[:, np.newaxis]
 
-    N_p = 5
-    Ng = 8
+    N_p = num_ervas
+    N_g = number_age_groups
     mob_av = np.zeros((N_p, N_p))
-    r = 1./3.
+    r = EPIDEMIC['r']
     for k in range(N_p):
         for m in range(N_p):
             if k == m:
-                mob_av[k,m] = (1.-r) + r*m_av[k,m]
+                mob_av[k, m] = (1.-r) + r*m_av[k, m]
             else:
-                mob_av[k,m] = r*m_av[k,m]
+                mob_av[k, m] = r*m_av[k, m]
 
     ####################################################################
     # Equation (3) in overleaf (change in population size because of mobility) N_hat_{lg}, N_hat_{l}
     pop_erva_hat = np.zeros(N_p)
-    age_er_hat = np.zeros((Ng, N_p))
+    age_er_hat = np.zeros((N_g, N_p))
 
     for m in range(N_p):
         m_k = 0.0
         for k in range(N_p):
             m_k = m_k + pop_erva[k]*mob_av[k,m]
-            for g in range(Ng):
+            for g in range(N_g):
                 age_er_hat[g, m] = sum(age_er[:, g]*mob_av[:, m])
 
         pop_erva_hat[m] = m_k
@@ -251,10 +233,10 @@ if __name__ == "__main__":
     age_pop = sum(age_er)
 
     # Computing beta_gh for force of infection ()
-    beta_gh = np.zeros((Ng, Ng))
+    beta_gh = np.zeros((N_g, N_g))
 
-    for g in range(Ng):
-        for h in range(Ng):
+    for g in range(N_g):
+        for h in range(N_g):
             if g == h:
                 for m in range(N_p):
                     sum_kg2 = 0.0
@@ -266,19 +248,24 @@ if __name__ == "__main__":
                 sum_kg = age_er_hat[g, :]*age_er_hat[h, :]
                 beta_gh[g, h] = age_pop[g]*c_gh_3[g, h]/(sum(sum_kg/pop_erva_hat))
 
-    ######################################################################################
-    # number of ervas
-    N_p = 5
-    # number of age groups
-    Ng = 8
+    return mob_av, beta_gh, pop_erva_hat, age_er
+
+
+if __name__ == "__main__":
+    erva_pop_file = 'stats/erva_population_age_2020.csv'
+
+    number_age_groups = 8
+    num_ervas = 5
+    N_p = num_ervas
+    N_g = number_age_groups
+    mob_av, beta_gh, pop_erva_hat, age_er, = get_model_parameters(number_age_groups, num_ervas, erva_pop_file)
+
     # number of optimization variables
-    N_f = (Ng-3)*N_p
+    N_f = (N_g-3)*N_p
     T = 90
     # transmission parameter
     beta = 0.02
     # Number of vaccines per day
     u = 30000
-
-    time = np.arange(0, T)
 
     Sg, Svg, Sxg, Lg, D_d, D_g, u_g = forward_integration(u, mob_av, beta, beta_gh, T, pop_erva_hat, age_er)
