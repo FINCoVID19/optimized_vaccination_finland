@@ -96,8 +96,6 @@ def forward_integration(u_con, c1, beta, c_gh, T, pop_hat, age_er, t0='2021-04-1
     D_d = np.zeros(N_t)
 
     pop_erva = age_er.sum(axis=1)
-    # Proportional population of the ERVA
-    pop_erva_prop = pop_erva/np.sum(pop_erva)
     # Initializing all group indicators in the last group
     age_group_indicators = np.array([N_g-1]*N_p)
     delay_check_vacc = EPIDEMIC['delay_check_vacc']
@@ -128,6 +126,8 @@ def forward_integration(u_con, c1, beta, c_gh, T, pop_hat, age_er, t0='2021-04-1
     # Forward integration for system of equations (1)
     for j in range(N_t-1):
         D = 0.0
+        use_age_groups = age_group_indicators != -1
+        # print(use_age_groups)
         # Deciding which policy to use
         if policy_thl:
             hosp_norm, hosp = get_metric_erva_weigth(H_wg+H_cg+H_rg, j, delay_check_vacc)
@@ -135,7 +135,19 @@ def forward_integration(u_con, c1, beta, c_gh, T, pop_hat, age_er, t0='2021-04-1
             thl_weight = ws_vacc[0]*pop_erva_prop + ws_vacc[1]*hosp_norm + ws_vacc[2]*infe_norm
             u_erva = u_con*thl_weight
         else:
-            u_erva = u_con*pop_erva_prop
+            # Proportional population of the ERVA
+            pops_erva_prop = np.zeros(pop_erva.shape)
+
+            use_pops = pop_erva[use_age_groups]
+            use_pops_prop = use_pops/np.sum(use_pops)
+            pops_erva_prop[use_age_groups] = use_pops_prop
+
+            u_erva = u_con*pops_erva_prop
+        if np.allclose(age_group_indicators, -1):
+            print('Time: %d. All ERVAs seem to have finished' % (j, ))
+            Susc_t = S_g[:, :, j]
+            Susc_t = np.sum(Susc_t)
+            print('Susceptibles left: %f.' % (Susc_t, ))
         for g in range(N_g-1, -1, -1):
             for n in range(N_p):
                 I_h_force = I_g[:, :, j]
@@ -151,9 +163,21 @@ def forward_integration(u_con, c1, beta, c_gh, T, pop_hat, age_er, t0='2021-04-1
                 if S_g[g, n, j] - beta*lambda_g*S_g[g, n, j] <= 0:
                     age_group_indicators[n] = g - 1
 
+                # if age_group_indicators[n] == -1:
+                #     print('Time: %d. ERVA %d finished with vaccinations.' % (j, n, ))
+
                 age_group_indicator = age_group_indicators[n]
                 if age_group_indicator == g:
+                    # Assign the vaccines to the current age group indicator and erva
                     u[g, n, j] = u_erva[n]/age_er[n, g]
+                    # Check for leftovers in the current age group
+                    all_aplied = S_g[g, n, j] - beta*lambda_g*S_g[g, n, j] - u[g, n, j]
+                    if all_aplied < 0:
+                        left_over = np.abs(all_aplied)
+                        # Apply the leftovers to the next age group
+                        left_over_real = left_over*age_er[n, g]
+                        if g-1 >= 0:
+                            u[g-1, n, j] = left_over_real/age_er[n, g-1]
 
                 # Ensures that we do not keep vaccinating after there are no susceptibles left
                 u[g, n, j] = min(u[g, n, j], max(0.0, S_g[g, n, j] - beta*lambda_g*S_g[g, n, j]))
@@ -263,10 +287,12 @@ if __name__ == "__main__":
 
     # number of optimization variables
     N_f = (N_g-3)*N_p
-    T = 90
+    T = 115
     # transmission parameter
     beta = 0.02
     # Number of vaccines per day
     u = 30000
+    t0 = '2021-04-19'
+    policy_thl = False
 
-    Sg, Svg, Sxg, Lg, D_d, D_g, u_g = forward_integration(u, mob_av, beta, beta_gh, T, pop_erva_hat, age_er)
+    _, _, _, _, _, D_g, u_g = forward_integration(u, mob_av, beta, beta_gh, T, pop_erva_hat, age_er, t0, policy_thl)
