@@ -29,6 +29,7 @@ def construct_next_generation_matrix(beta_gh, pop_erva_hat, mob_av, age_er):
                     mobility_term = 0
                     for m in range(ks):
                         mobility_term += mob_av[k, m]*mob_av[l, m]/pop_erva_hat[m]
+                    # print(mobility_term)
                     next_gen_matrix[kg_idx, lh_idx] = interaction_term*mobility_term
                     # print("%d,%d" % (kg_idx, lh_idx), end=' ')
             # print('')
@@ -41,7 +42,7 @@ def construct_next_generation_matrix(beta_gh, pop_erva_hat, mob_av, age_er):
 if __name__ == "__main__":
     erva_pop_file = 'stats/erva_population_age_2020.csv'
 
-    number_age_groups = 8
+    number_age_groups = 9
     num_ervas = 5
     N_p = num_ervas
     N_g = number_age_groups
@@ -49,9 +50,15 @@ if __name__ == "__main__":
 
     rho = construct_next_generation_matrix(beta_gh, pop_erva_hat, mob_av, age_er)
 
+    print('Age groups: %d. ERVAS: %d' % (number_age_groups, num_ervas))
+    print('largest eigenvalue beta 1: %f' % (rho, ))
     beta_09 = 0.9/rho
     print('R=0.9 Beta=%f' % (beta_09, ))
     beta_11 = 1.1/rho
     print('R=1.1 Beta=%f' % (beta_11, ))
+    beta_12 = 1.2/rho
+    print('R=1.2 Beta=%f' % (beta_12, ))
     beta_13 = 1.3/rho
     print('R=1.3 Beta=%f' % (beta_13, ))
+
+    search_r = np.linspace(1.1, 1.3, 10)

@@ -7,7 +7,7 @@ from fetch_data import (
 from env_var import EPIDEMIC
 
 
-def forward_integration(u_con, c1, beta, c_gh, T, pop_hat, age_er, t0='2021-04-19', policy='equal'):
+def forward_integration(u_con, c1, beta, c_gh, T, pop_hat, age_er, t0='2021-04-19', policy='equal', checks=False):
     # number of age groups and ervas
     num_ervas, num_age_groups = age_er.shape
     N_t = T
@@ -254,14 +254,15 @@ def forward_integration(u_con, c1, beta, c_gh, T, pop_hat, age_er, t0='2021-04-1
                 D = D + D_g[g, n, j+1]*age_er[n, g]
         D_d[j] = D
 
-    # Final check to see that we always vaccinate u_con people
-    u_final = u*age_er.T[:, :, np.newaxis]
-    u_final = u_final.sum(axis=0)
-    u_final = u_final.sum(axis=0)
-    print(u_final)
-    print(np.where(~np.isclose(u_final, u_con)))
+    if checks:
+        # Final check to see that we always vaccinate u_con people
+        u_final = u*age_er.T[:, :, np.newaxis]
+        u_final = u_final.sum(axis=0)
+        u_final = u_final.sum(axis=0)
+        print(u_final)
+        print(np.where(~np.isclose(u_final, u_con)))
 
-    return S_g, S_vg, S_xg, L_g, I_g, D_g, u
+    return S_g, S_vg, S_xg, V_g, I_g, D_g, u
 
 
 def get_model_parameters(number_age_groups, num_ervas, erva_pop_file):
@@ -300,6 +301,8 @@ def get_model_parameters(number_age_groups, num_ervas, erva_pop_file):
                 mob_av[k, m] = (1.-r) + r*m_av[k, m]
             else:
                 mob_av[k, m] = r*m_av[k, m]
+
+    # print(m_av)
 
     ####################################################################
     # Equation (3) in overleaf (change in population size because of mobility)
@@ -357,5 +360,6 @@ if __name__ == "__main__":
     u = 30000
     t0 = '2021-04-19'
     policy = 'equal'
+    checks = True
 
-    _, _, _, _, _, D_g, u_g = forward_integration(u, mob_av, beta, beta_gh, T, pop_erva_hat, age_er, t0, policy)
+    _, _, _, _, _, D_g, u_g = forward_integration(u, mob_av, beta, beta_gh, T, pop_erva_hat, age_er, t0, policy, checks)
