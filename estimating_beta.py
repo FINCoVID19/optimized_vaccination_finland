@@ -53,3 +53,5 @@ if __name__ == "__main__":
     print('R=0.9 Beta=%f' % (beta_09, ))
     beta_11 = 1.1/rho
     print('R=1.1 Beta=%f' % (beta_11, ))
+    beta_13 = 1.3/rho
+    print('R=1.3 Beta=%f' % (beta_13, ))
