@@ -2,7 +2,5 @@
 __pycache__
 .DS_Store
 
-out
-
 env
 *.log
