@@ -50,9 +50,6 @@ if __name__ == "__main__":
     rho = construct_next_generation_matrix(beta_gh, pop_erva_hat, mob_av, age_er)
 
     beta_09 = 0.9/rho
-    print(beta_09)
+    print('R=0.9 Beta=%f' % (beta_09, ))
     beta_11 = 1.1/rho
-    print(beta_11)
-    # beta_search = np.linspace(0, 1, 1000)
-    # for beta in beta_search:
-    #     construct_next_generation_matrix(beta_gh, pop_erva_hat, mob_av, age_er, beta)
+    print('R=1.1 Beta=%f' % (beta_11, ))
