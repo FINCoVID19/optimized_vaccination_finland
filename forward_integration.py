@@ -38,8 +38,9 @@ def forward_integration(u_con, c1, beta, c_gh, T, pop_hat, age_er, t0='2021-04-1
     alpha = EPIDEMIC['alpha']
     e = EPIDEMIC['e']
 
+    csv_name = 'out/epidemic_finland_%d.csv' % (num_age_groups, )
     # Reading CSV
-    epidemic_csv = pd.read_csv('out/epidemic_finland_8.csv')
+    epidemic_csv = pd.read_csv(csv_name)
     # Getting only date t0
     epidemic_zero = epidemic_csv.loc[epidemic_csv['date'] == t0, :]
     # Removing Ahvenanmaa or Aland
@@ -50,8 +51,8 @@ def forward_integration(u_con, c1, beta, c_gh, T, pop_hat, age_er, t0='2021-04-1
     ervas_df = list(pd.unique(epidemic_zero['erva']))
     ervas_pd_order = [ervas_df.index(erva) for erva in ervas_order]
 
-    # Droping all the columns we are not using
-    epidemic_zero = epidemic_zero.drop(columns=['date', 'erva', 'age', 'First dose', 'Second dose', 'Second dose cumulative', 'infected detected', 'infected undetected'])
+    # Selecting the columns to use
+    epidemic_zero = epidemic_zero[['susceptible', 'infected', 'exposed', 'recovered', 'First dose cumulative']]
     # Converting to numpy
     epidemic_npy = epidemic_zero.values
     # Reshaping to 3d array
@@ -72,8 +73,11 @@ def forward_integration(u_con, c1, beta, c_gh, T, pop_hat, age_er, t0='2021-04-1
     # Dividing to get the proportion
     epidemic_npy = epidemic_npy/age_er_div
 
-    # Initializing with CSV values
+    # epidemic_npy has num_ervas first, compartmetns have age first
+    # Transposing to epidemic_npy to accomodate to compartments
     epidemic_npy = epidemic_npy.transpose(1, 0, 2)
+
+    # Initializing with CSV values
     S_g[:, :, 0] = epidemic_npy[:, :, 0]
     I_g[:, :, 0] = epidemic_npy[:, :, 1]
     E_g[:, :, 0] = epidemic_npy[:, :, 2]
@@ -282,7 +286,7 @@ def get_model_parameters(number_age_groups, num_ervas, erva_pop_file):
     c_gh_3 = EPIDEMIC['contact_matrix'][number_age_groups]
 
     # Mobility matrix
-    m_av = EPIDEMIC['mobility_matrix'][number_age_groups]
+    m_av = EPIDEMIC['mobility_matrix'][num_ervas]
 
     m_av = m_av/pop_erva[:, np.newaxis]
 
@@ -338,7 +342,7 @@ def get_model_parameters(number_age_groups, num_ervas, erva_pop_file):
 if __name__ == "__main__":
     erva_pop_file = 'stats/erva_population_age_2020.csv'
 
-    number_age_groups = 8
+    number_age_groups = 9
     num_ervas = 5
     N_p = num_ervas
     N_g = number_age_groups
