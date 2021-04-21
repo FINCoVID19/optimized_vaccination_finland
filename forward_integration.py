@@ -7,7 +7,7 @@ from fetch_data import (
 from env_var import EPIDEMIC
 
 
-def forward_integration(u_con, c1, beta, c_gh, T, pop_hat, age_er, t0='2021-04-19', policy_thl=False):
+def forward_integration(u_con, c1, beta, c_gh, T, pop_hat, age_er, t0='2021-04-19', policy='equal'):
     # number of age groups and ervas
     num_ervas, num_age_groups = age_er.shape
     N_t = T
@@ -168,7 +168,7 @@ def forward_integration(u_con, c1, beta, c_gh, T, pop_hat, age_er, t0='2021-04-1
         pops_erva_prop[use_ervas] = use_pops_prop
 
         # Deciding which policy to use
-        if policy_thl:
+        if policy == 'thl':
             # If use THL then get the normalized counts of infected people and hosp
             hosp_norm, hosp = get_metric_erva_weigth(H_wg+H_cg+H_rg, j, delay_check_vacc, use_ervas)
             infe_norm, infe = get_metric_erva_weigth(I_g, j, delay_check_vacc, use_ervas)
@@ -177,8 +177,12 @@ def forward_integration(u_con, c1, beta, c_gh, T, pop_hat, age_er, t0='2021-04-1
 
             # Get the vaccines assigned to each erva
             u_erva = u_con_remain*thl_weight
-        else:
+        elif policy == 'equal':
             u_erva = u_con_remain*pops_erva_prop
+        elif policy == 'no_vacc':
+            u_erva = np.zeros(pop_erva.shape)
+        else:
+            raise ValueError('Policy not valid: %s' % (policy, ))
 
         # Go over all ervas
         for n in range(N_p):
@@ -253,7 +257,7 @@ def forward_integration(u_con, c1, beta, c_gh, T, pop_hat, age_er, t0='2021-04-1
     print(u_final)
     print(np.where(~np.isclose(u_final, u_con)))
 
-    return S_g, S_vg, S_xg, L_g, D_d, D_g, u
+    return S_g, S_vg, S_xg, L_g, I_g, D_g, u
 
 
 def get_model_parameters(number_age_groups, num_ervas, erva_pop_file):
@@ -348,6 +352,6 @@ if __name__ == "__main__":
     # Number of vaccines per day
     u = 30000
     t0 = '2021-04-19'
-    policy_thl = True
+    policy = 'equal'
 
-    _, _, _, _, _, D_g, u_g = forward_integration(u, mob_av, beta, beta_gh, T, pop_erva_hat, age_er, t0, policy_thl)
+    _, _, _, _, _, D_g, u_g = forward_integration(u, mob_av, beta, beta_gh, T, pop_erva_hat, age_er, t0, policy)
