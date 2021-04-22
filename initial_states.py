@@ -3,19 +3,26 @@ import logging
 from logging import handlers
 import pandas as pd
 import numpy as np
+from env_var import EPIDEMIC
 from fetch_data import (
     construct_cases_age_erva_daily, static_population_erva_age,
-    construct_thl_vaccines_erva_daily, fetch_hs_hospitalizations
+    construct_thl_vaccines_erva_daily, construct_hs_hosp_age_erva
 )
 
 
 def compartment_values_daily(logger, erva_pop_file, filename=None,
-                             inf_period=7, a=2.46, lat_period=3,
                              number_age_groups=9):
+    logger.info('Calculating epidemic compartments')
     cases_by_age_erva = construct_cases_age_erva_daily(logger,
                                                        number_age_groups=number_age_groups)
 
-    # hosp_by_erva = fetch_hs_hospitalizations(logger)
+    inf_period = (EPIDEMIC['T_I'])**(-1)
+    inf_period = int(inf_period)
+    lat_period = (EPIDEMIC['T_E'])**(-1)
+    lat_period = int(lat_period)
+    logger.info('Infectious period: %d. Latent period: %d' % (inf_period,
+                                                              lat_period))
+    a = EPIDEMIC['unreported_exponent']
 
     cases_by_age_erva.sort_values(['Time', 'erva'])
     dates = pd.unique(cases_by_age_erva['Time'])
@@ -107,11 +114,21 @@ def compartment_values_daily(logger, erva_pop_file, filename=None,
 
 def full_epidemic_state_finland(logger, erva_pop_file, filename=None,
                                 number_age_groups=9):
+    logger.info('Getting complete state of epidemic with '
+                'epidemic compartments, vaccines and hospitalizations')
+    logger.info('Number of age groups: %d' % (number_age_groups))
     compart_df = compartment_values_daily(logger, erva_pop_file,
                                           number_age_groups=number_age_groups)
+    logger.info('Epidemic compartments gotten.')
     vacc_df = construct_thl_vaccines_erva_daily(logger,
                                                 number_age_groups=number_age_groups)
+    logger.info('Number of vaccinated gotten.')
+    hosp_df = construct_hs_hosp_age_erva(logger, number_age_groups=number_age_groups)
+    logger.info('Number of hospitalizations gotten.')
     epidemic_state = pd.merge(compart_df, vacc_df,
+                              on=['date', 'erva', 'age'],
+                              how='left')
+    epidemic_state = pd.merge(epidemic_state, hosp_df,
                               on=['date', 'erva', 'age'],
                               how='left')
     # Merge will left missing values with NaNs. Filled them with 0
@@ -120,7 +137,10 @@ def full_epidemic_state_finland(logger, erva_pop_file, filename=None,
     epidemic_state['First dose cumulative'] = epidemic_state.groupby(['erva', 'age'])['First dose'].cumsum()
     epidemic_state['Second dose cumulative'] = epidemic_state.groupby(['erva', 'age'])['Second dose'].cumsum()
 
+    # Removing from susceptible data for vaccinated and hospitalized
     epidemic_state['susceptible'] = epidemic_state['susceptible'] - epidemic_state['First dose cumulative']
+    epidemic_state['susceptible'] = epidemic_state['susceptible'] - epidemic_state['ward']
+    epidemic_state['susceptible'] = epidemic_state['susceptible'] - epidemic_state['icu']
 
     if filename is not None:
         epidemic_state.to_csv(filename, index=False)
@@ -135,7 +155,7 @@ if __name__ == "__main__":
 
     # Get a logger of the events
     logfile = os.path.join(curr_dir, 'logs_initial_states.log')
-    numeric_log_level = getattr(logging, "DEBUG", None)
+    numeric_log_level = getattr(logging, "INFO", None)
     logging.basicConfig(
         format='%(asctime)s %(levelname)s: %(message)s',
         datefmt='%m/%d/%Y %H:%M:%S %p',

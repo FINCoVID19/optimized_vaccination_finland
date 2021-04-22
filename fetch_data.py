@@ -4,7 +4,7 @@ from io import StringIO
 import pandas as pd
 import numpy as np
 import datetime
-from env_var import REQUESTS, MAPPINGS
+from env_var import REQUESTS, MAPPINGS, EPIDEMIC
 
 
 def transform_thl_week_datetime(thl_time):
@@ -21,22 +21,8 @@ def transform_thl_week_datetime(thl_time):
     return monday_of_week
 
 
-def static_population_erva(logger):
-    population_data = {
-        "HYKS": 2198182,
-        "TYKS": 869004,
-        "TAYS": 902681,
-        "KYS": 797234,
-        "OYS": 736563,
-        "Åland": 30129,
-    }
-    # Add the population of all Finland
-    population_data['All'] = sum(population_data.values())
-    logger.info('Returned population data for 2019')
-    return population_data
-
-
 def static_population_erva_age(logger, csv_file, number_age_groups=9):
+    logger.info('Getting population of ervas by age (2020)')
     population_age_df = pd.read_csv(csv_file, sep=";", encoding='utf-8')
     logger.debug('Constructed pandas dataframe')
 
@@ -59,7 +45,7 @@ def static_population_erva_age(logger, csv_file, number_age_groups=9):
 
 
 def fetch_thl_vaccines_erva_weekly(logger, filename=None, number_age_groups=9):
-    logger.debug('Getting THL vaccination statistics')
+    logger.info('Getting THL vaccination statistics (weekly)')
 
     # Select the appropriate URL
     url = REQUESTS['vaccination']
@@ -78,7 +64,7 @@ def fetch_thl_vaccines_erva_weekly(logger, filename=None, number_age_groups=9):
 
     # Tell to the response what is the correct encoding
     response.encoding = response.apparent_encoding
-    logger.info('Got THL reported cases!')
+    logger.debug('Got THL reported cases!')
 
     buffer_for_pandas = StringIO(response.text)
     vaccinated_df = pd.read_csv(buffer_for_pandas, sep=";")
@@ -119,7 +105,7 @@ def fetch_thl_vaccines_erva_weekly(logger, filename=None, number_age_groups=9):
 
 
 def fetch_hs_hospitalizations(logger):
-    logger.debug('Getting HS hospitalizations')
+    logger.info('Getting HS hospitalizations by ERVA (daily)')
 
     # Select the appropriate URL
     url = REQUESTS['hospitalizations']
@@ -155,13 +141,67 @@ def fetch_hs_hospitalizations(logger):
     return hospital_df
 
 
-def construct_hs_hosp_age_erva(logger):
-    logger.debug('Constructing hospitalizations by age and erva')
+def construct_hs_hosp_age_erva(logger, number_age_groups=9):
+    logger.info('Constructing hospitalizations by age and erva (daily)')
 
     hosp_by_erva = fetch_hs_hospitalizations(logger)
+    age_groups = MAPPINGS['age_groups'][number_age_groups]['names']
+    probs_age_icu = EPIDEMIC['p_c'][number_age_groups]
+    probs_age_ward = EPIDEMIC['p_H'][number_age_groups]
+    probs_age_death = EPIDEMIC['proportion_deaths_age'][number_age_groups]
+
+    hosp_by_erva_list = hosp_by_erva.values
+    dates = np.unique(hosp_by_erva_list[:, 0])
+    curr_date = datetime.datetime.strptime(dates[0], "%Y-%m-%d")
+    last_date = datetime.datetime.strptime(dates[-1], "%Y-%m-%d")
+    ervas = np.unique(hosp_by_erva_list[:, 1])
+
+    header = 'date;erva;age;ward;icu;death'
+    final_lines = [header, ]
+    while curr_date <= last_date:
+        day_of_week = curr_date.weekday()
+        for erva in ervas:
+            # If we are on weekend
+            if day_of_week == 5:
+                friday_date = curr_date - datetime.timedelta(days=1)
+                use_date = friday_date.strftime("%Y-%m-%d")
+            elif day_of_week == 6:
+                monday_date = curr_date + datetime.timedelta(days=1)
+                use_date = monday_date.strftime("%Y-%m-%d")
+            else:
+                use_date = curr_date.strftime("%Y-%m-%d")
+
+            date = curr_date.strftime("%Y-%m-%d")
+            values_day_erva = hosp_by_erva_list[np.where((
+                                hosp_by_erva_list[:, 0] == use_date) & (hosp_by_erva_list[:, 1] == erva)
+                              )]
+            ward_day_erva = 0 if len(values_day_erva[:, 3]) == 0 else values_day_erva[:, 3].item()
+            icu_day_erva = 0 if len(values_day_erva[:, 4]) == 0 else values_day_erva[:, 4].item()
+            death_day_erva = 0 if len(values_day_erva[:, 5]) == 0 else values_day_erva[:, 5].item()
+
+            ward_age_day_erva = ward_day_erva*probs_age_ward
+            icu_age_day_erva = icu_day_erva*probs_age_icu
+            death_age_day_erva = death_day_erva*probs_age_death
+            for i, group in enumerate(age_groups):
+                line = [date,
+                        erva,
+                        group,
+                        str(ward_age_day_erva[i]),
+                        str(icu_age_day_erva[i]),
+                        str(death_age_day_erva[i])]
+                line_str = ';'.join(line)
+                final_lines.append(line_str)
+        curr_date = curr_date + datetime.timedelta(days=1)
+    complete_csv = '\n'.join(final_lines)
+
+    buffer_for_pandas = StringIO(complete_csv)
+    hosp_age_erva_daily = pd.read_csv(buffer_for_pandas, sep=";")
+
+    return hosp_age_erva_daily
 
 
 def construct_thl_vaccines_erva_daily(logger, filename=None, number_age_groups=9):
+    logger.info('Constructing vaccinations (daily)')
     vaccinated_weekly = fetch_thl_vaccines_erva_weekly(logger,
                                                        number_age_groups=number_age_groups)
     vaccinated_list = vaccinated_weekly.values
@@ -211,7 +251,7 @@ def construct_thl_vaccines_erva_daily(logger, filename=None, number_age_groups=9
 
 
 def fetch_thl_cases_erva_daily(logger):
-    logger.debug('Getting THL reported cases')
+    logger.debug('Getting THL reported cases by ERVA (daily)')
 
     # Select the appropriate URL
     url = REQUESTS['cases_by_day']
@@ -230,7 +270,7 @@ def fetch_thl_cases_erva_daily(logger):
 
     # Tell to the response what is the correct encoding
     response.encoding = response.apparent_encoding
-    logger.info('Got THL reported cases!')
+    logger.debug('Got THL reported cases!')
 
     buffer_for_pandas = StringIO(response.text)
     new_cases_df = pd.read_csv(buffer_for_pandas, sep=";")
@@ -258,47 +298,8 @@ def fetch_thl_cases_erva_daily(logger):
     return reported_cases_erva
 
 
-def fetch_thl_cases_erva_weekly(logger):
-    logger.debug('Getting THL reported cases')
-
-    # Select the appropriate URL
-    url = REQUESTS['cases_by_hcd']
-    headers = {
-        'User-Agent': 'Me'
-    }
-    logger.debug(('Sending the request..\n'
-                  'URL: %s\n'
-                  'Headers: %s\n') % (url,
-                                      json.dumps(headers, indent=1)))
-    # Load data from THL's API as CSV
-    response = requests.get(url, headers=headers)
-    if response.status_code != 200:
-        logger.error(response.content)
-        raise RuntimeError("THL's API failed!")
-
-    # Tell to the response what is the correct encoding
-    response.encoding = response.apparent_encoding
-    logger.info('Got THL reported cases!')
-
-    buffer_for_pandas = StringIO(response.text)
-    new_cases_df = pd.read_csv(buffer_for_pandas, sep=";")
-    logger.debug('Constructed pandas dataframe')
-
-    new_cases_df = new_cases_df.fillna(0)
-    logger.debug('Filled NaNs with zeros')
-
-    hcd_erva_mapping = MAPPINGS['hcd_erva']
-    new_cases_df['erva'] = new_cases_df.apply(lambda row: hcd_erva_mapping[row['Area']], axis=1)
-    logger.debug('Augmented data with erva')
-
-    reported_cases_erva = new_cases_df.groupby(by=['Time', 'erva'], as_index=False).sum()
-    logger.debug('Keeping only ervas')
-
-    return reported_cases_erva
-
-
 def fetch_finland_cases_age_weekly(logger, number_age_groups=9):
-    logger.debug('Getting THL reported cases')
+    logger.debug('Getting THL reported cases by age (weekly)')
 
     # Select the appropriate URL
     url = REQUESTS['cases_by_age']
@@ -317,7 +318,7 @@ def fetch_finland_cases_age_weekly(logger, number_age_groups=9):
 
     # Tell to the response what is the correct encoding
     response.encoding = response.apparent_encoding
-    logger.info('Got THL reported cases!')
+    logger.debug('Got THL reported cases!')
 
     buffer_for_pandas = StringIO(response.text)
     new_cases_df = pd.read_csv(buffer_for_pandas, sep=";")
@@ -378,6 +379,7 @@ def fetch_finland_cases_age_weekly(logger, number_age_groups=9):
 
 
 def construct_finland_age_cases_daily(logger, number_age_groups=9):
+    logger.info('Constructing cases by age (daily)')
     cases, cases_prop = fetch_finland_cases_age_weekly(logger,
                                                        number_age_groups=number_age_groups)
     cases_list = cases.values
@@ -425,6 +427,7 @@ def construct_finland_age_cases_daily(logger, number_age_groups=9):
 
 
 def construct_cases_age_erva_daily(logger, number_age_groups=9):
+    logger.info('Constructing cases by age and erva (daily)')
     _, cases_age_prop = construct_finland_age_cases_daily(logger,
                                                           number_age_groups=number_age_groups)
     cases_erva = fetch_thl_cases_erva_daily(logger)
