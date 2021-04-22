@@ -51,12 +51,19 @@ def forward_integration(u_con, c1, beta, c_gh, T, pop_hat, age_er, t0='2021-04-1
     ervas_df = list(pd.unique(epidemic_zero['erva']))
     ervas_pd_order = [ervas_df.index(erva) for erva in ervas_order]
 
+    select_columns = ['susceptible',
+                      'infected',
+                      'exposed',
+                      'recovered',
+                      'First dose cumulative',
+                      'ward',
+                      'icu']
     # Selecting the columns to use
-    epidemic_zero = epidemic_zero[['susceptible', 'infected', 'exposed', 'recovered', 'First dose cumulative']]
+    epidemic_zero = epidemic_zero[select_columns]
     # Converting to numpy
     epidemic_npy = epidemic_zero.values
     # Reshaping to 3d array
-    epidemic_npy = epidemic_npy.reshape(N_p, N_g, 5)
+    epidemic_npy = epidemic_npy.reshape(N_p, N_g, len(select_columns))
 
     # Rearranging the order of the matrix with correct order
     epidemic_npy = epidemic_npy[ervas_pd_order, :]
@@ -67,6 +74,8 @@ def forward_integration(u_con, c1, beta, c_gh, T, pop_hat, age_er, t0='2021-04-1
     E_g = np.zeros((N_g, N_p, N_t))
     R_g = np.zeros((N_g, N_p, N_t))
     V_g = np.zeros((N_g, N_p, N_t))
+    H_wg = np.zeros((N_g, N_p, N_t))
+    H_cg = np.zeros((N_g, N_p, N_t))
 
     # Adding 1 dimension to age_er to do array division
     age_er_div = age_er[:, :, np.newaxis]
@@ -83,13 +92,13 @@ def forward_integration(u_con, c1, beta, c_gh, T, pop_hat, age_er, t0='2021-04-1
     E_g[:, :, 0] = epidemic_npy[:, :, 2]
     R_g[:, :, 0] = epidemic_npy[:, :, 3]
     V_g[:, :, 0] = epidemic_npy[:, :, 4]
+    H_wg[:, :, 0] = epidemic_npy[:, :, 5]
+    H_cg[:, :, 0] = epidemic_npy[:, :, 6]
 
     # Initializing the rest of compartments to zero
     D_g = np.zeros((N_g, N_p, N_t))
     Q_0g = np.zeros((N_g, N_p, N_t))
     Q_1g = np.zeros((N_g, N_p, N_t))
-    H_wg = np.zeros((N_g, N_p, N_t))
-    H_cg = np.zeros((N_g, N_p, N_t))
     H_rg = np.zeros((N_g, N_p, N_t))
     S_vg = np.zeros((N_g, N_p, N_t))
     S_xg = np.zeros((N_g, N_p, N_t))
