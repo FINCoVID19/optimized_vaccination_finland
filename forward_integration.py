@@ -7,7 +7,9 @@ from fetch_data import (
 from env_var import EPIDEMIC
 
 
-def forward_integration(u_con, c1, beta, c_gh, T, pop_hat, age_er, t0='2021-04-19', policy='equal', checks=False):
+def forward_integration(u_con, c1, beta, c_gh, T, pop_hat, age_er,
+                        t0='2021-04-19', policy='equal', checks=False,
+                        ws_vacc=EPIDEMIC['ws_vacc'], init_vacc=True):
     # number of age groups and ervas
     num_ervas, num_age_groups = age_er.shape
     N_t = T
@@ -38,7 +40,11 @@ def forward_integration(u_con, c1, beta, c_gh, T, pop_hat, age_er, t0='2021-04-1
     alpha = EPIDEMIC['alpha']
     e = EPIDEMIC['e']
 
-    csv_name = 'out/epidemic_finland_%d.csv' % (num_age_groups, )
+    if init_vacc:
+        csv_name = 'out/epidemic_finland_%d.csv' % (num_age_groups, )
+    else:
+        csv_name = 'out/epidemic_finland_%d_no_vacc.csv' % (num_age_groups, )
+
     # Reading CSV
     epidemic_csv = pd.read_csv(csv_name)
     # Getting only date t0
@@ -112,7 +118,6 @@ def forward_integration(u_con, c1, beta, c_gh, T, pop_hat, age_er, t0='2021-04-1
     # Initializing all group indicators in the last group
     age_group_indicators = np.array([N_g-1]*N_p)
     delay_check_vacc = EPIDEMIC['delay_check_vacc']
-    ws_vacc = EPIDEMIC['ws_vacc']
 
     # Initialize vaccination rate
     u = np.zeros((N_g, N_p, N_t))
@@ -271,7 +276,7 @@ def forward_integration(u_con, c1, beta, c_gh, T, pop_hat, age_er, t0='2021-04-1
         print(u_final)
         print(np.where(~np.isclose(u_final, u_con)))
 
-    return S_g, S_vg, S_xg, V_g, I_g, D_g, u
+    return S_g, E_g, S_xg, V_g, I_g, D_g, u
 
 
 def get_model_parameters(number_age_groups, num_ervas, erva_pop_file):

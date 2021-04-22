@@ -3,11 +3,11 @@
 The purpose of this repository is to generate the initial states of the epidemic in Finland. Then use the generated initial states to run forward simulations with different vaccination strategies.
 
 Organization of the repository:
-- `fetch_data.py`: API calls and parsing of the data to construct the initial state of the epidemic
-- `initial_states.py`: Use the functions in `fetch_data.py` to generate CSV files with the final epidemic state.
+- `fetch_data.py`: API calls and parsing of the data to construct the initial state of the epidemic.
+- `initial_states.py`: Uses the functions in `fetch_data.py` to generate CSV files with the final epidemic state.
 - `forward_integration.py`: Code to calculate the parameters of the model (except for `beta`) and run the forward simulations with a vaccination strategy.
 - `estimating_beta.py`: Constructs the NGM and calculates the `beta` parameter given a `R_eff` value.
-- `plot_forward_simulations.ipynb`: Use the code in `forward_integration.py` to simulate, plot and compare different vaccination strategies.
+- `plot_forward_simulations.ipynb`: Uses the code in `forward_integration.py` to simulate, plot and compare different vaccination strategies.
 - `env_var.py`: The static parameters of the epidemic as well as some other parameters to construct the initial states are stored here.
 - `read_data.ipynb`: Small example on how the generated CSV files by `initial_states.py` can be used.
 

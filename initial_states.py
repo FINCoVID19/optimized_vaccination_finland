@@ -42,19 +42,14 @@ def compartment_values_daily(logger, erva_pop_file, filename=None,
     assert len(dates) == days
 
     infectious_detected = np.zeros_like(cases_erva_age_npy)
-    recovered_detected = np.zeros_like(cases_erva_age_npy)
-
+    lookback_period = inf_period + lat_period
     for day_t in range(days):
-        omega = day_t-inf_period
+        omega = day_t-lookback_period
         if omega < 0:
             omega = 0
         cases_in_period = cases_erva_age_npy[omega:day_t, ]
         # Get the total infected in the period and assign to time t
         infectious_detected[day_t, ] = cases_in_period.sum(axis=0)
-
-        recovered_period = cases_erva_age_npy[:omega, ]
-        # Get the total recovered and assign them to time t
-        recovered_detected[day_t, :] = recovered_period.sum(axis=0)
 
     k = np.arange(ages) + 1
     upscale_factor = 1 + 9*k**(-a)
@@ -63,16 +58,16 @@ def compartment_values_daily(logger, erva_pop_file, filename=None,
 
     logger.debug('Multiplied fraction: %s' % (upscale_factor, ))
     infectious_undetected = infectious_detected * upscale_factor
-    recovered_undetected = recovered_detected * upscale_factor
 
     infected_total = infectious_detected + infectious_undetected
-    recovered_total = recovered_detected + recovered_undetected
 
-    exposed_total = np.zeros_like(cases_erva_age_npy)
-    for day_t in range(days):
-        if day_t+lat_period >= days:
-            break
-        exposed_total[day_t, :] = infected_total[day_t+lat_period, :]
+    infected_real = (inf_period/lookback_period)*infected_total
+    exposed_real = (lat_period/lookback_period)*infected_total
+
+    recovered_real = np.zeros_like(cases_erva_age_npy)
+    for day_t in range(inf_period, days):
+        recovered_period = infected_total[:day_t-inf_period-1, :]
+        recovered_real[day_t, :] = recovered_period.sum(axis=0)
 
     # Getting the population to get the final Susceptibles
     pop_ervas, _ = static_population_erva_age(logger, erva_pop_file,
@@ -86,7 +81,7 @@ def compartment_values_daily(logger, erva_pop_file, filename=None,
     pop_ervas_npy = pop_ervas_npy[np.newaxis, :]
 
     susceptible = np.zeros_like(cases_erva_age_npy)
-    susceptible = pop_ervas_npy - exposed_total - infected_total - recovered_total
+    susceptible = pop_ervas_npy - exposed_real - infected_real - recovered_real
 
     complete_dataframe = pd.DataFrame()
     for erva_i, erva_name in enumerate(ervas):
@@ -98,9 +93,9 @@ def compartment_values_daily(logger, erva_pop_file, filename=None,
                 'susceptible': susceptible[:, erva_i, age_i],
                 'infected detected': infectious_detected[:, erva_i, age_i],
                 'infected undetected': infectious_undetected[:, erva_i, age_i],
-                'infected': infected_total[:, erva_i, age_i],
-                'exposed': exposed_total[:, erva_i, age_i],
-                'recovered': recovered_total[:, erva_i, age_i],
+                'infected': infected_real[:, erva_i, age_i],
+                'exposed': exposed_real[:, erva_i, age_i],
+                'recovered': recovered_real[:, erva_i, age_i],
             }
             erva_age_dataframe = pd.DataFrame(data=dataframe_data)
             complete_dataframe = complete_dataframe.append(erva_age_dataframe)
@@ -113,7 +108,7 @@ def compartment_values_daily(logger, erva_pop_file, filename=None,
 
 
 def full_epidemic_state_finland(logger, erva_pop_file, filename=None,
-                                number_age_groups=9):
+                                number_age_groups=9, init_vacc=True):
     logger.info('Getting complete state of epidemic with '
                 'epidemic compartments, vaccines and hospitalizations')
     logger.info('Number of age groups: %d' % (number_age_groups))
@@ -134,11 +129,18 @@ def full_epidemic_state_finland(logger, erva_pop_file, filename=None,
     # Merge will left missing values with NaNs. Filled them with 0
     epidemic_state = epidemic_state.fillna(0)
 
-    epidemic_state['First dose cumulative'] = epidemic_state.groupby(['erva', 'age'])['First dose'].cumsum()
-    epidemic_state['Second dose cumulative'] = epidemic_state.groupby(['erva', 'age'])['Second dose'].cumsum()
+    if init_vacc:
+        epidemic_state['First dose cumulative'] = epidemic_state.groupby(['erva', 'age'])['First dose'].cumsum()
+        epidemic_state['Second dose cumulative'] = epidemic_state.groupby(['erva', 'age'])['Second dose'].cumsum()
+    else:
+        epidemic_state['First dose cumulative'] = 0
+        epidemic_state['Second dose cumulative'] = 0
+        epidemic_state['susceptible'] = epidemic_state['susceptible'] + epidemic_state['recovered']
+        epidemic_state['recovered'] = 0
 
     # Removing from susceptible data for vaccinated and hospitalized
     epidemic_state['susceptible'] = epidemic_state['susceptible'] - epidemic_state['First dose cumulative']
+
     epidemic_state['susceptible'] = epidemic_state['susceptible'] - epidemic_state['ward']
     epidemic_state['susceptible'] = epidemic_state['susceptible'] - epidemic_state['icu']
 
@@ -180,9 +182,19 @@ if __name__ == "__main__":
         erva_pop_file = os.path.join(stats_dir, 'erva_population_age_2020.csv')
 
         out_csv_filename = os.path.join(out_dir, 'epidemic_finland_9.csv')
-        full_epidemic_state_finland(logger, erva_pop_file, out_csv_filename, number_age_groups=9)
+        full_epidemic_state_finland(logger, erva_pop_file, out_csv_filename,
+                                    number_age_groups=9)
 
         out_csv_filename = os.path.join(out_dir, 'epidemic_finland_8.csv')
-        full_epidemic_state_finland(logger, erva_pop_file, out_csv_filename, number_age_groups=8)
+        full_epidemic_state_finland(logger, erva_pop_file, out_csv_filename,
+                                    number_age_groups=8)
+
+        out_csv_filename = os.path.join(out_dir, 'epidemic_finland_8_no_vacc.csv')
+        full_epidemic_state_finland(logger, erva_pop_file, out_csv_filename,
+                                    number_age_groups=8, init_vacc=False)
+
+        out_csv_filename = os.path.join(out_dir, 'epidemic_finland_9_no_vacc.csv')
+        full_epidemic_state_finland(logger, erva_pop_file, out_csv_filename,
+                                    number_age_groups=9, init_vacc=False)
     except Exception:
         logger.exception("Fatal error in main loop")
