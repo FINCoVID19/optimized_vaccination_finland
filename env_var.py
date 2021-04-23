@@ -148,7 +148,7 @@ EXPERIMENTS = {
     't0': '2021-04-19',
     'vaccines_per_day': 30000,
     'simulate_T': 115,
-    'r_effs': [1.0, 1.25, 1.5],
+    'r_effs': [1.0, 1.25, 1.5, 2.0],
     'init_vacc': True,
     'num_ervas': 5,
     'num_age_groups': 9
