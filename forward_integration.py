@@ -345,8 +345,6 @@ def get_model_parameters(number_age_groups, num_ervas, init_vacc, t0):
             else:
                 mob_av[k, m] = r*m_av[k, m]
 
-    # print(m_av)
-
     ####################################################################
     # Equation (3) in overleaf (change in population size because of mobility)
     # N_hat_{lg}, N_hat_{l}
@@ -407,11 +405,6 @@ def get_model_parameters(number_age_groups, num_ervas, init_vacc, t0):
 
     eig_vals = eigvals(next_gen_matrix)
     rho = np.abs(np.amax(eig_vals))
-
-    # total_susceptibles = np.sum(epidemic_sus)
-    # total_population = np.sum(age_er)
-    # fraction_of_s = total_susceptibles/total_population
-    # rho = rho*fraction_of_s
 
     return mob_av, beta_gh, pop_erva_hat, age_er, rho
 
