@@ -427,7 +427,7 @@ if __name__ == "__main__":
                                                                       init_vacc,
                                                                       t0)
 
-    rs = EXPERIMENTS['r_effs'] + [2.0]
+    rs = EXPERIMENTS['r_effs']
     print('rho: %f' % (rho, ))
     for r in rs:
         beta = r/rho
