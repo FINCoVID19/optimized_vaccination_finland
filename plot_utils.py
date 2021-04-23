@@ -53,29 +53,6 @@ def get_experiments_results(num_age_groups, num_ervas,
     return complete_results
 
 
-def plot_ervas(ax, D_g, t0, T, ervas_labels, plot_subject):
-    begin = datetime.datetime.strptime(t0, '%Y-%m-%d')
-
-    num_ages, num_ervas, days = D_g.shape
-    assert num_ervas == len(ervas_labels)
-
-    x = [begin + datetime.timedelta(days=day) for day in range(T)]
-    deaths = D_g.sum(axis=0)
-    assert deaths.shape[0] == num_ervas
-    assert deaths.shape[1] == T
-
-    for erva_i in range(num_ervas):
-        ax.plot(x, deaths[erva_i, :], label=ervas_labels[erva_i])
-
-    ax.set_xlabel('Date')
-    ax.set_ylabel('Number of %s' % (plot_subject, ))
-    ax.set_title('Number of %s per ERVA' % (plot_subject, ))
-
-    ax.legend()
-
-    return ax
-
-
 def plot_age_groups(ax, D_g, t0, T, age_labels, plot_subject):
     begin = datetime.datetime.strptime(t0, '%Y-%m-%d')
 
