@@ -42,32 +42,37 @@ def compartment_values_daily(logger, erva_pop_file, filename=None,
     assert len(dates) == days
 
     infectious_detected = np.zeros_like(cases_erva_age_npy)
+    recovered_detected = np.zeros_like(cases_erva_age_npy)
     lookback_period = inf_period + lat_period
     for day_t in range(days):
-        omega = day_t-lookback_period
+        omega = day_t - lookback_period
+        omega_r = day_t - inf_period
         if omega < 0:
             omega = 0
+        if omega_r < 0:
+            omega_r = 0
         cases_in_period = cases_erva_age_npy[omega:day_t, ]
         # Get the total infected in the period and assign to time t
         infectious_detected[day_t, ] = cases_in_period.sum(axis=0)
 
+        recovered_period = cases_erva_age_npy[:omega_r, ]
+        recovered_detected[day_t, ] = recovered_period.sum(axis=0)
+
     k = np.arange(ages) + 1
     upscale_factor = 1 + 9*k**(-a)
+
     # Broadcasting operation
     upscale_factor = upscale_factor[np.newaxis, np.newaxis, :]
 
     logger.debug('Multiplied fraction: %s' % (upscale_factor, ))
     infectious_undetected = infectious_detected * upscale_factor
+    recovered_undetected = recovered_detected * upscale_factor
 
     infected_total = infectious_detected + infectious_undetected
+    recovered_total = recovered_detected + recovered_undetected
 
     infected_real = (inf_period/lookback_period)*infected_total
     exposed_real = (lat_period/lookback_period)*infected_total
-
-    recovered_real = np.zeros_like(cases_erva_age_npy)
-    for day_t in range(inf_period, days):
-        recovered_period = infected_total[:day_t-inf_period-1, :]
-        recovered_real[day_t, :] = recovered_period.sum(axis=0)
 
     # Getting the population to get the final Susceptibles
     pop_ervas, _ = static_population_erva_age(logger, erva_pop_file,
@@ -81,7 +86,7 @@ def compartment_values_daily(logger, erva_pop_file, filename=None,
     pop_ervas_npy = pop_ervas_npy[np.newaxis, :]
 
     susceptible = np.zeros_like(cases_erva_age_npy)
-    susceptible = pop_ervas_npy - exposed_real - infected_real - recovered_real
+    susceptible = pop_ervas_npy - exposed_real - infected_real - recovered_total
 
     complete_dataframe = pd.DataFrame()
     for erva_i, erva_name in enumerate(ervas):
@@ -95,7 +100,7 @@ def compartment_values_daily(logger, erva_pop_file, filename=None,
                 'infected undetected': infectious_undetected[:, erva_i, age_i],
                 'infected': infected_real[:, erva_i, age_i],
                 'exposed': exposed_real[:, erva_i, age_i],
-                'recovered': recovered_real[:, erva_i, age_i],
+                'recovered': recovered_total[:, erva_i, age_i],
             }
             erva_age_dataframe = pd.DataFrame(data=dataframe_data)
             complete_dataframe = complete_dataframe.append(erva_age_dataframe)

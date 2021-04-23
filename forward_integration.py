@@ -4,7 +4,8 @@ import logging
 from fetch_data import (
     static_population_erva_age,
 )
-from env_var import EPIDEMIC
+from scipy.linalg import eigvals
+from env_var import EPIDEMIC, EXPERIMENTS
 
 
 def forward_integration(u_con, c1, beta, c_gh, T, pop_hat, age_er,
@@ -276,11 +277,12 @@ def forward_integration(u_con, c1, beta, c_gh, T, pop_hat, age_er,
         print(u_final)
         print(np.where(~np.isclose(u_final, u_con)))
 
-    return S_g, E_g, S_xg, V_g, I_g, D_g, u
+    return S_g, E_g, H_wg, H_cg, H_rg, I_g, D_g, u
 
 
-def get_model_parameters(number_age_groups, num_ervas, erva_pop_file):
+def get_model_parameters(number_age_groups, num_ervas, init_vacc, t0):
     logger = logging.getLogger()
+    erva_pop_file = 'stats/erva_population_age_2020.csv'
     pop_ervas_age, _ = static_population_erva_age(logger, erva_pop_file,
                                                   number_age_groups=number_age_groups)
     pop_ervas_age = pop_ervas_age[~pop_ervas_age['erva'].str.contains('All')]
@@ -289,11 +291,38 @@ def get_model_parameters(number_age_groups, num_ervas, erva_pop_file):
     pop_ervas_npy = pop_ervas_age['Total'].values
     pop_ervas_npy = pop_ervas_npy.reshape(num_ervas, number_age_groups)
 
-    ervas_order = ['HYKS', 'TYKS', 'TAYS', 'KYS', 'OYS']
+    ervas_order = EPIDEMIC['ervas_order']
+
     ervas_df = list(pd.unique(pop_ervas_age['erva']))
     ervas_pd_order = [ervas_df.index(erva) for erva in ervas_order]
     # Rearrange rows in the correct order
     age_er = pop_ervas_npy[ervas_pd_order, :]
+
+    if init_vacc:
+        csv_name = 'out/epidemic_finland_%d.csv' % (number_age_groups, )
+    else:
+        csv_name = 'out/epidemic_finland_%d_no_vacc.csv' % (number_age_groups, )
+
+    # Reading CSV
+    epidemic_csv = pd.read_csv(csv_name)
+    # Getting only date t0
+    epidemic_zero = epidemic_csv.loc[epidemic_csv['date'] == t0, :]
+    # Removing Ahvenanmaa or Aland
+    epidemic_zero = epidemic_zero[~epidemic_zero['erva'].str.contains('land')]
+
+    # Getting the order the ervas have inside the dataframe
+    ervas_df = list(pd.unique(epidemic_zero['erva']))
+    ervas_pd_order = [ervas_df.index(erva) for erva in ervas_order]
+
+    # Selecting the columns to use
+    epidemic_zero = epidemic_zero[['susceptible']]
+    # Converting to numpy
+    epidemic_sus = epidemic_zero.values
+    epidemic_sus = epidemic_sus.reshape(num_ervas, number_age_groups)
+
+    # Rearranging the order of the matrix with correct order
+    epidemic_sus = epidemic_sus[ervas_pd_order, :]
+    # age_er = epidemic_sus
 
     pop_erva = age_er.sum(axis=1)
 
@@ -353,27 +382,67 @@ def get_model_parameters(number_age_groups, num_ervas, erva_pop_file):
                 sum_kg = age_er_hat[g, :]*age_er_hat[h, :]
                 beta_gh[g, h] = age_pop[g]*c_gh_3[g, h]/(sum(sum_kg/pop_erva_hat))
 
-    return mob_av, beta_gh, pop_erva_hat, age_er
+    # Computing NGM and rho
+    T_I = EPIDEMIC['T_I']**(-1)
+    ks = num_ervas
+    gs = number_age_groups
+    kg = ks*gs
+    next_gen_matrix = np.zeros((kg, kg))
+
+    # beta_ti_n = age_er*T_I
+    beta_ti_n = epidemic_sus*T_I
+    for k in range(ks):
+        for g in range(gs):
+            kg_idx = k*gs + g
+            beta_ti_n_kg = beta_ti_n[k, g]
+            for l in range(ks):
+                for h in range(gs):
+                    lh_idx = l*gs + h
+
+                    interaction_term = beta_ti_n_kg*beta_gh[g, h]
+                    mobility_term = 0
+                    for m in range(ks):
+                        mobility_term += mob_av[k, m]*mob_av[l, m]/pop_erva_hat[m]
+                    next_gen_matrix[kg_idx, lh_idx] = interaction_term*mobility_term
+
+    eig_vals = eigvals(next_gen_matrix)
+    rho = np.abs(np.amax(eig_vals))
+
+    # total_susceptibles = np.sum(epidemic_sus)
+    # total_population = np.sum(age_er)
+    # fraction_of_s = total_susceptibles/total_population
+    # rho = rho*fraction_of_s
+
+    return mob_av, beta_gh, pop_erva_hat, age_er, rho
 
 
 if __name__ == "__main__":
-    erva_pop_file = 'stats/erva_population_age_2020.csv'
+    num_age_groups = EXPERIMENTS['num_age_groups']
+    num_ervas = EXPERIMENTS['num_ervas']
+    t0 = EXPERIMENTS['t0']
+    init_vacc = EXPERIMENTS['init_vacc']
 
-    number_age_groups = 9
-    num_ervas = 5
-    N_p = num_ervas
-    N_g = number_age_groups
-    mob_av, beta_gh, pop_erva_hat, age_er, = get_model_parameters(number_age_groups, num_ervas, erva_pop_file)
+    mob_av, beta_gh, pop_erva_hat, age_er, rho = get_model_parameters(num_age_groups,
+                                                                      num_ervas,
+                                                                      init_vacc,
+                                                                      t0)
 
-    # number of optimization variables
-    N_f = (N_g-3)*N_p
-    T = 115
-    # transmission parameter
-    beta = 0.2
-    # Number of vaccines per day
-    u = 30000
-    t0 = '2021-04-19'
+    T = EXPERIMENTS['simulate_T']
+    reff = 1.5
+    beta = reff/rho
+    u = EXPERIMENTS['vaccines_per_day']
     policy = 'equal'
     checks = True
-
-    _, _, _, _, _, D_g, u_g = forward_integration(u, mob_av, beta, beta_gh, T, pop_erva_hat, age_er, t0, policy, checks)
+    S_g, E_g, H_wg, H_cg, H_rg, I_g, D_g, u_g = forward_integration(
+                                                        u_con=u,
+                                                        c1=mob_av,
+                                                        beta=beta,
+                                                        c_gh=beta_gh,
+                                                        T=T,
+                                                        pop_hat=pop_erva_hat,
+                                                        age_er=age_er,
+                                                        t0=t0,
+                                                        policy=policy,
+                                                        init_vacc=init_vacc,
+                                                        checks=checks
+                                                    )

@@ -144,6 +144,16 @@ MAPPINGS = {
     }
 }
 
+EXPERIMENTS = {
+    't0': '2021-04-19',
+    'vaccines_per_day': 30000,
+    'simulate_T': 115,
+    'r_effs': [1.0, 1.25, 1.5],
+    'init_vacc': True,
+    'num_ervas': 5,
+    'num_age_groups': 9
+}
+
 EPIDEMIC = {
     'proportion_deaths_age': {
         9: np.array([0.0006, 0.0002, 0.0012, 0.00026, 0.0064, 0.0210, 0.0575, 0.2092, 0.7013]),
