@@ -427,12 +427,18 @@ if __name__ == "__main__":
                                                                       init_vacc,
                                                                       t0)
 
+    rs = EXPERIMENTS['r_effs']
+    print('rho: %f' % (rho, ))
+    for r in rs:
+        beta = r/rho
+        print('R: %f. Beta: %f' % (r, beta))
+
     T = EXPERIMENTS['simulate_T']
     reff = 1.5
     beta = reff/rho
     u = EXPERIMENTS['vaccines_per_day']
     policy = 'equal'
-    checks = True
+    checks = False
     S_g, E_g, H_wg, H_cg, H_rg, I_g, D_g, u_g = forward_integration(
                                                         u_con=u,
                                                         c1=mob_av,
