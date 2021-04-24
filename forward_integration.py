@@ -141,6 +141,9 @@ def forward_integration(u_con, c1, beta, c_gh, T, pop_hat, age_er,
 
         # Get the counts in the last period
         metric_t = metric[:, :, tot_delay:t]
+
+        assert metric_t.shape[2] <= delay
+
         # Sum over all time
         metric_t = metric_t.sum(axis=2)
         # Metric_t is a proportion of erva and age group
@@ -169,8 +172,6 @@ def forward_integration(u_con, c1, beta, c_gh, T, pop_hat, age_er,
     remain_last = 0
     # Forward integration for system of equations (1)
     for j in range(N_t-1):
-        D = 0.0
-
         # Sum the remaining vaccines from the last timestep if any
         u_con_remain = u_con + remain_last
         remain_last = 0
@@ -213,15 +214,16 @@ def forward_integration(u_con, c1, beta, c_gh, T, pop_hat, age_er,
 
                 # Check if we still can vaccinate someone in this age group
                 if S_g[g, n, j] - beta*lambda_g*S_g[g, n, j] <= 0:
+                    # Continue to next age group
                     age_group_indicators[n] = g - 1
 
                     # If we reach here it means  that we have vaccines
-                    # that we are not goign to use. Distribute to next erva
+                    # that we are not going to use. Distribute to next erva
                     if g == 0 and u_erva[n] != 0:
                         if n+1 < N_p:
                             u_erva[n+1] += u_erva[n]
                         else:
-                            # If the next erva is the last one then next timestep
+                            # If the next erva is the last one then to next timestep
                             remain_last += u_erva[n]
 
                 # Assign the vaccines to the current age group and erva
@@ -252,6 +254,7 @@ def forward_integration(u_con, c1, beta, c_gh, T, pop_hat, age_er,
                 # Ensures that we do not keep vaccinating after there are no susceptibles left
                 u[g, n, j] = min(u[g, n, j], max(0.0, S_g[g, n, j] - beta*lambda_g*S_g[g, n, j]))
 
+                # Epidemic dynamics
                 S_g[g, n, j+1] = S_g[g, n, j] - beta*lambda_g*S_g[g, n, j] - u[g, n, j]
                 S_vg[g, n, j+1] = S_vg[g, n, j] - beta*lambda_g*S_vg[g, n, j] + u[g, n, j] - T_V*S_vg[g, n, j]
                 S_xg[g, n, j+1] = S_xg[g, n, j] - beta*lambda_g*S_xg[g, n, j] + (1.-alpha*e)*T_V*S_vg[g, n, j]
@@ -265,9 +268,6 @@ def forward_integration(u_con, c1, beta, c_gh, T, pop_hat, age_er,
                 H_rg[g, n, j+1] = H_rg[g, n, j] + (1.-mu_c[g])*T_hc*H_cg[g, n, j] - T_hr*H_rg[g, n, j]
                 R_g[g, n, j+1] = R_g[g, n, j] + T_hr*H_rg[g, n, j] + (1.-mu_w[g])*(1.-p_c[g])*T_hw*H_wg[g, n, j] + (1.-mu_q[g])*T_q0*Q_0g[g, n, j]
                 D_g[g, n, j+1] = D_g[g, n, j] + mu_q[g]*T_q0*Q_0g[g, n, j]+mu_w[g]*(1.-p_c[g])*T_hw*H_wg[g, n, j] + mu_c[g]*T_hc*H_cg[g, n, j]
-
-                D = D + D_g[g, n, j+1]*age_er[n, g]
-        D_d[j] = D
 
     if checks:
         # Final check to see that we always vaccinate u_con people
