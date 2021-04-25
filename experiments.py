@@ -39,10 +39,16 @@ def get_experiments_results(num_age_groups, num_ervas,
                                                                 j,
                                                                 total_strategies))
             total_hosp = H_wg + H_cg + H_rg
+            deaths_incidence = D_g.copy()
+            deaths_incidence[:, :, 1:] -= D_g[:, :, :-1]
+
+            assert np.all(deaths_incidence.cumsum(axis=2) == D_g)
+
             results = {
                 'hospitalizations': total_hosp*age_er_prop,
                 'infections': I_g*age_er_prop,
                 'deaths': D_g*age_er_prop,
+                'new deaths': deaths_incidence*age_er_prop,
                 'vaccinations': u_g*age_er_prop,
             }
             result_pairs = (label, results)
