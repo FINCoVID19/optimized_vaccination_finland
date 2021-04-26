@@ -9,6 +9,7 @@ def get_experiments_results(num_age_groups, num_ervas,
                                                                       num_ervas,
                                                                       init_vacc,
                                                                       t0)
+    print('rho: %s' % (rho, ))
     age_er_prop = age_er.T
     age_er_prop = age_er_prop[:, :, np.newaxis]
     complete_results = {}
@@ -19,25 +20,26 @@ def get_experiments_results(num_age_groups, num_ervas,
         j = 1
         total_strategies = len(strategies)
         for policy, ws, label in strategies:
-            _, _, H_wg, H_cg, H_rg, I_g, D_g, u_g = forward_integration(
-                                                        u_con=u,
-                                                        c1=mob_av,
-                                                        beta=beta,
-                                                        c_gh=beta_gh,
-                                                        T=T,
-                                                        pop_hat=pop_erva_hat,
-                                                        age_er=age_er,
-                                                        t0=t0,
-                                                        policy=policy,
-                                                        ws_vacc=ws,
-                                                        init_vacc=init_vacc
-                                                    )
-            print('Finished R: %s. %d/%d. Policy: %s. %d/%d' % (r,
-                                                                i+1,
-                                                                total_rs,
-                                                                label,
-                                                                j,
-                                                                total_strategies))
+            _, _, H_wg, H_cg, H_rg, I_g, D_g, u_g, hops_i = forward_integration(
+                                                                u_con=u,
+                                                                c1=mob_av,
+                                                                beta=beta,
+                                                                c_gh=beta_gh,
+                                                                T=T,
+                                                                pop_hat=pop_erva_hat,
+                                                                age_er=age_er,
+                                                                t0=t0,
+                                                                policy=policy,
+                                                                ws_vacc=ws,
+                                                                init_vacc=init_vacc
+                                                            )
+            print('Finished R: %s. Beta: %s %d/%d. Policy: %s. %d/%d' % (r,
+                                                                         beta,
+                                                                         i+1,
+                                                                         total_rs,
+                                                                         label,
+                                                                         j,
+                                                                         total_strategies))
             total_hosp = H_wg + H_cg + H_rg
             deaths_incidence = D_g.copy()
             deaths_incidence[:, :, 1:] -= D_g[:, :, :-1]
@@ -50,6 +52,7 @@ def get_experiments_results(num_age_groups, num_ervas,
                 'deaths': D_g*age_er_prop,
                 'new deaths': deaths_incidence*age_er_prop,
                 'vaccinations': u_g*age_er_prop,
+                'new hospitalizations': hops_i*age_er_prop,
             }
             result_pairs = (label, results)
             results_label.append(result_pairs)

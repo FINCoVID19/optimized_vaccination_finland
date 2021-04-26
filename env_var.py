@@ -145,7 +145,7 @@ MAPPINGS = {
 }
 
 EXPERIMENTS = {
-    't0': '2021-04-19',
+    't0': '2021-04-18',
     'vaccines_per_day': 30000,
     'simulate_T': 115,
     'r_effs': [1.0, 1.25, 1.5, 2.0],
