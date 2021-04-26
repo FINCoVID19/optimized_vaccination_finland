@@ -9,7 +9,7 @@ from env_var import EPIDEMIC, EXPERIMENTS
 
 
 def forward_integration(u_con, c1, beta, c_gh, T, pop_hat, age_er,
-                        t0='2021-04-19', policy='equal', checks=False,
+                        t0, policy='equal', checks=False,
                         ws_vacc=EPIDEMIC['ws_vacc'], init_vacc=True):
     # number of age groups and ervas
     num_ervas, num_age_groups = age_er.shape
@@ -269,7 +269,7 @@ def forward_integration(u_con, c1, beta, c_gh, T, pop_hat, age_er,
                 R_g[g, n, j+1] = R_g[g, n, j] + T_hr*H_rg[g, n, j] + (1.-mu_w[g])*(1.-p_c[g])*T_hw*H_wg[g, n, j] + (1.-mu_q[g])*T_q0*Q_0g[g, n, j]
                 D_g[g, n, j+1] = D_g[g, n, j] + mu_q[g]*T_q0*Q_0g[g, n, j]+mu_w[g]*(1.-p_c[g])*T_hw*H_wg[g, n, j] + mu_c[g]*T_hc*H_cg[g, n, j]
 
-                hospitalized_incidence[g, n, j] = T_q1*Q_1g[g, n, j]
+                hospitalized_incidence[g, n, j+1] = T_q1*Q_1g[g, n, j]
 
     if checks:
         # Final check to see that we always vaccinate u_con people
@@ -434,16 +434,16 @@ if __name__ == "__main__":
     u = EXPERIMENTS['vaccines_per_day']
     policy = 'equal'
     checks = False
-    S_g, E_g, H_wg, H_cg, H_rg, I_g, D_g, u_g = forward_integration(
-                                                        u_con=u,
-                                                        c1=mob_av,
-                                                        beta=beta,
-                                                        c_gh=beta_gh,
-                                                        T=T,
-                                                        pop_hat=pop_erva_hat,
-                                                        age_er=age_er,
-                                                        t0=t0,
-                                                        policy=policy,
-                                                        init_vacc=init_vacc,
-                                                        checks=checks
-                                                    )
+    S_g, E_g, H_wg, H_cg, H_rg, I_g, D_g, u_g, hosp_g = forward_integration(
+                                                            u_con=u,
+                                                            c1=mob_av,
+                                                            beta=beta,
+                                                            c_gh=beta_gh,
+                                                            T=T,
+                                                            pop_hat=pop_erva_hat,
+                                                            age_er=age_er,
+                                                            t0=t0,
+                                                            policy=policy,
+                                                            init_vacc=init_vacc,
+                                                            checks=checks
+                                                        )
