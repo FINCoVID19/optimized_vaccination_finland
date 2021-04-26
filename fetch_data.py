@@ -146,8 +146,8 @@ def construct_hs_hosp_age_erva(logger, number_age_groups=9):
 
     hosp_by_erva = fetch_hs_hospitalizations(logger)
     age_groups = MAPPINGS['age_groups'][number_age_groups]['names']
-    probs_age_icu = EPIDEMIC['p_c'][number_age_groups]
-    probs_age_ward = EPIDEMIC['p_H'][number_age_groups]
+    probs_age_icu = EPIDEMIC['proportion_icu_age'][number_age_groups]
+    probs_age_ward = EPIDEMIC['proportion_ward_age'][number_age_groups]
     probs_age_death = EPIDEMIC['proportion_deaths_age'][number_age_groups]
 
     hosp_by_erva_list = hosp_by_erva.values

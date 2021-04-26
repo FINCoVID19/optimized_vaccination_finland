@@ -46,16 +46,13 @@ def compartment_values_daily(logger, erva_pop_file, filename=None,
     lookback_period = inf_period + lat_period
     for day_t in range(days):
         omega = day_t - lookback_period
-        omega_r = day_t - inf_period
         if omega < 0:
             omega = 0
-        if omega_r < 0:
-            omega_r = 0
         cases_in_period = cases_erva_age_npy[omega:day_t, ]
         # Get the total infected in the period and assign to time t
         infectious_detected[day_t, ] = cases_in_period.sum(axis=0)
 
-        recovered_period = cases_erva_age_npy[:omega_r, ]
+        recovered_period = cases_erva_age_npy[:omega, ]
         recovered_detected[day_t, ] = recovered_period.sum(axis=0)
 
     k = np.arange(ages) + 1

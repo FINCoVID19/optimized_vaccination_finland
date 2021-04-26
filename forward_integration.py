@@ -112,8 +112,6 @@ def forward_integration(u_con, c1, beta, c_gh, T, pop_hat, age_er,
 
     # I store the values for the force of infection (needed for the adjoint equations)
     L_g = np.zeros((N_g, N_p, N_t))
-    # Cummulative number for all age groups and all ervas
-    D_d = np.zeros(N_t)
 
     pop_erva = age_er.sum(axis=1)
     # Initializing all group indicators in the last group
