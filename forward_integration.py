@@ -62,7 +62,7 @@ def forward_integration(u_con, c1, beta, c_gh, T, pop_hat, age_er,
                       'infected',
                       'exposed',
                       'recovered',
-                      'First dose cumulative',
+                      'vaccinated',
                       'ward',
                       'icu']
     # Selecting the columns to use
@@ -269,7 +269,9 @@ def forward_integration(u_con, c1, beta, c_gh, T, pop_hat, age_er,
                 R_g[g, n, j+1] = R_g[g, n, j] + T_hr*H_rg[g, n, j] + (1.-mu_w[g])*(1.-p_c[g])*T_hw*H_wg[g, n, j] + (1.-mu_q[g])*T_q0*Q_0g[g, n, j]
                 D_g[g, n, j+1] = D_g[g, n, j] + mu_q[g]*T_q0*Q_0g[g, n, j]+mu_w[g]*(1.-p_c[g])*T_hw*H_wg[g, n, j] + mu_c[g]*T_hc*H_cg[g, n, j]
 
-                hospitalized_incidence[g, n, j+1] = T_q1*Q_1g[g, n, j]
+                hospitalized_incidence[g, n, j] = T_q1*Q_1g[g, n, j]
+
+    hospitalized_incidence[:, :, T-1] = T_q1*Q_1g[:, :, T-1]
 
     if checks:
         # Final check to see that we always vaccinate u_con people

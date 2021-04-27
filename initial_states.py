@@ -110,7 +110,8 @@ def compartment_values_daily(logger, erva_pop_file, filename=None,
 
 
 def full_epidemic_state_finland(logger, erva_pop_file, filename=None,
-                                number_age_groups=9, init_vacc=True):
+                                number_age_groups=9, init_vacc=True,
+                                e=EPIDEMIC['e']):
     logger.info('Getting complete state of epidemic with '
                 'epidemic compartments, vaccines and hospitalizations')
     logger.info('Number of age groups: %d' % (number_age_groups))
@@ -133,15 +134,17 @@ def full_epidemic_state_finland(logger, erva_pop_file, filename=None,
 
     if init_vacc:
         epidemic_state['First dose cumulative'] = epidemic_state.groupby(['erva', 'age'])['First dose'].cumsum()
+        epidemic_state['vaccinated'] = e*epidemic_state['First dose cumulative']
         epidemic_state['Second dose cumulative'] = epidemic_state.groupby(['erva', 'age'])['Second dose'].cumsum()
     else:
         epidemic_state['First dose cumulative'] = 0
         epidemic_state['Second dose cumulative'] = 0
         epidemic_state['susceptible'] = epidemic_state['susceptible'] + epidemic_state['recovered']
         epidemic_state['recovered'] = 0
+        epidemic_state['vaccinated'] = 0
 
     # Removing from susceptible data for vaccinated and hospitalized
-    epidemic_state['susceptible'] = epidemic_state['susceptible'] - epidemic_state['First dose cumulative']
+    epidemic_state['susceptible'] = epidemic_state['susceptible'] - epidemic_state['vaccinated']
 
     epidemic_state['susceptible'] = epidemic_state['susceptible'] - epidemic_state['ward']
     epidemic_state['susceptible'] = epidemic_state['susceptible'] - epidemic_state['icu']
@@ -186,17 +189,5 @@ if __name__ == "__main__":
         out_csv_filename = os.path.join(out_dir, 'epidemic_finland_9.csv')
         full_epidemic_state_finland(logger, erva_pop_file, out_csv_filename,
                                     number_age_groups=9)
-
-        out_csv_filename = os.path.join(out_dir, 'epidemic_finland_8.csv')
-        full_epidemic_state_finland(logger, erva_pop_file, out_csv_filename,
-                                    number_age_groups=8)
-
-        out_csv_filename = os.path.join(out_dir, 'epidemic_finland_8_no_vacc.csv')
-        full_epidemic_state_finland(logger, erva_pop_file, out_csv_filename,
-                                    number_age_groups=8, init_vacc=False)
-
-        out_csv_filename = os.path.join(out_dir, 'epidemic_finland_9_no_vacc.csv')
-        full_epidemic_state_finland(logger, erva_pop_file, out_csv_filename,
-                                    number_age_groups=9, init_vacc=False)
     except Exception:
         logger.exception("Fatal error in main loop")
