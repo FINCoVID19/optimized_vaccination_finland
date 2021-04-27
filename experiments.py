@@ -3,17 +3,42 @@ from forward_integration import forward_integration, get_model_parameters
 import numpy as np
 
 
-def get_experiments_results(num_age_groups, num_ervas,
+def get_experiments_results(num_age_groups, num_ervas, e,
                             init_vacc, strategies, u, T, r_experiments, t0):
     mob_av, beta_gh, pop_erva_hat, age_er, rho = get_model_parameters(num_age_groups,
                                                                       num_ervas,
                                                                       init_vacc,
                                                                       t0)
-    print('rho: %s' % (rho, ))
     age_er_prop = age_er.T
     age_er_prop = age_er_prop[:, :, np.newaxis]
     complete_results = {}
     total_rs = len(r_experiments)
+
+    experiments_params = {
+        'num_ervas': num_ervas,
+        'num_age_groups': num_age_groups,
+        'u': u,
+        'rho': rho,
+        't0': t0,
+        'T': T,
+        'e': e,
+        'r_experiments': r_experiments,
+        'init_vacc': init_vacc,
+        'strategies': strategies
+    }
+    print(('Beginning experiments.\n'
+           'Parameters:\n'
+           'Number of age ervas: {num_ervas}.\n'
+           'Number of age groups: {num_age_groups}.\n'
+           'Number of vaccines per day: {u}.\n'
+           'rho: {rho}.\n'
+           't0: {t0}.\n'
+           'T: {T}.\n'
+           'Vaccine efficacy (e): {e}.\n'
+           'Rs to try: {r_experiments}.\n'
+           'Initialize with vaccinated people: {init_vacc}.\n'
+           'Strategies:\n{strategies}.\n').format(**experiments_params))
+
     for i, r in enumerate(r_experiments):
         beta = r/rho
         results_label = []
@@ -31,6 +56,7 @@ def get_experiments_results(num_age_groups, num_ervas,
                                                                 t0=t0,
                                                                 policy=policy,
                                                                 ws_vacc=ws,
+                                                                e=e,
                                                                 init_vacc=init_vacc
                                                             )
             print('Finished R: %s. Beta: %s %d/%d. Policy: %s. %d/%d' % (r,

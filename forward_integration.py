@@ -10,7 +10,8 @@ from env_var import EPIDEMIC, EXPERIMENTS
 
 def forward_integration(u_con, c1, beta, c_gh, T, pop_hat, age_er,
                         t0, policy='equal', checks=False,
-                        ws_vacc=EPIDEMIC['ws_vacc'], init_vacc=True):
+                        ws_vacc=EPIDEMIC['ws_vacc'], e=EPIDEMIC['e'],
+                        init_vacc=True):
     # number of age groups and ervas
     num_ervas, num_age_groups = age_er.shape
     N_t = T
@@ -39,7 +40,6 @@ def forward_integration(u_con, c1, beta, c_gh, T, pop_hat, age_er,
     # Fraction of hospitalized needing critical care
     p_c = EPIDEMIC['p_c'][num_age_groups]
     alpha = EPIDEMIC['alpha']
-    e = EPIDEMIC['e']
 
     if init_vacc:
         csv_name = 'out/epidemic_finland_%d.csv' % (num_age_groups, )
