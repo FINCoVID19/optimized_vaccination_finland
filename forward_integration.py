@@ -120,7 +120,7 @@ def forward_integration(u_con, c1, beta, c_gh, T, pop_hat, age_er,
     # Initialize vaccination rate
     u = np.zeros((N_g, N_p, N_t))
 
-    assert np.sum(ws_vacc) == 0 or np.sum(ws_vacc) == 1
+    assert np.isclose(np.sum(ws_vacc), 0) or np.isclose(np.sum(ws_vacc), 1)
 
     # Function to calculate the force of infection
     def force_of_inf(I_h, c_gh, k, N_g, N_p, mob, pop_hat):
