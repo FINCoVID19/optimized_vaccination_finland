@@ -135,6 +135,7 @@ def full_epidemic_state_finland(logger, erva_pop_file, filename=None,
     if init_vacc:
         epidemic_state['First dose cumulative'] = epidemic_state.groupby(['erva', 'age'])['First dose'].cumsum()
         epidemic_state['vaccinated'] = e*epidemic_state['First dose cumulative']
+        epidemic_state['vaccinated no imm'] = (1-e)*epidemic_state['First dose cumulative']
         epidemic_state['Second dose cumulative'] = epidemic_state.groupby(['erva', 'age'])['Second dose'].cumsum()
     else:
         epidemic_state['First dose cumulative'] = 0
@@ -142,10 +143,11 @@ def full_epidemic_state_finland(logger, erva_pop_file, filename=None,
         epidemic_state['susceptible'] = epidemic_state['susceptible'] + epidemic_state['recovered']
         epidemic_state['recovered'] = 0
         epidemic_state['vaccinated'] = 0
+        epidemic_state['vaccinated no imm'] = 0
 
     # Removing from susceptible data for vaccinated and hospitalized
     epidemic_state['susceptible'] = epidemic_state['susceptible'] - epidemic_state['vaccinated']
-
+    epidemic_state['susceptible'] = epidemic_state['susceptible'] - epidemic_state['vaccinated no imm']
     epidemic_state['susceptible'] = epidemic_state['susceptible'] - epidemic_state['ward']
     epidemic_state['susceptible'] = epidemic_state['susceptible'] - epidemic_state['icu']
 

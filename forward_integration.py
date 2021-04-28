@@ -9,7 +9,8 @@ from env_var import EPIDEMIC, EXPERIMENTS
 
 
 def forward_integration(u_con, c1, beta, c_gh, T, pop_hat, age_er,
-                        t0, ws_vacc, e, checks=False, init_vacc=True):
+                        t0, ws_vacc, e, checks=False, init_vacc=True,
+                        u_op_file=None):
     # number of age groups and ervas
     num_ervas, num_age_groups = age_er.shape
     N_t = T
@@ -60,6 +61,7 @@ def forward_integration(u_con, c1, beta, c_gh, T, pop_hat, age_er,
                       'exposed',
                       'recovered',
                       'vaccinated',
+                      'vaccinated no imm',
                       'ward',
                       'icu']
     # Selecting the columns to use
@@ -80,6 +82,7 @@ def forward_integration(u_con, c1, beta, c_gh, T, pop_hat, age_er,
     V_g = np.zeros((N_g, N_p, N_t))
     H_wg = np.zeros((N_g, N_p, N_t))
     H_cg = np.zeros((N_g, N_p, N_t))
+    S_xg = np.zeros((N_g, N_p, N_t))
 
     # Adding 1 dimension to age_er to do array division
     age_er_div = age_er[:, :, np.newaxis]
@@ -96,8 +99,9 @@ def forward_integration(u_con, c1, beta, c_gh, T, pop_hat, age_er,
     E_g[:, :, 0] = epidemic_npy[:, :, 2]
     R_g[:, :, 0] = epidemic_npy[:, :, 3]
     V_g[:, :, 0] = epidemic_npy[:, :, 4]
-    H_wg[:, :, 0] = epidemic_npy[:, :, 5]
-    H_cg[:, :, 0] = epidemic_npy[:, :, 6]
+    S_xg[:, :, 0] = epidemic_npy[:, :, 5]
+    H_wg[:, :, 0] = epidemic_npy[:, :, 6]
+    H_cg[:, :, 0] = epidemic_npy[:, :, 7]
 
     # Initializing the rest of compartments to zero
     D_g = np.zeros((N_g, N_p, N_t))
@@ -105,7 +109,6 @@ def forward_integration(u_con, c1, beta, c_gh, T, pop_hat, age_er,
     Q_1g = np.zeros((N_g, N_p, N_t))
     H_rg = np.zeros((N_g, N_p, N_t))
     S_vg = np.zeros((N_g, N_p, N_t))
-    S_xg = np.zeros((N_g, N_p, N_t))
 
     hospitalized_incidence = np.zeros((N_g, N_p, N_t))
 
@@ -118,7 +121,10 @@ def forward_integration(u_con, c1, beta, c_gh, T, pop_hat, age_er,
     delay_check_vacc = EPIDEMIC['delay_check_vacc']
 
     # Initialize vaccination rate
-    u = np.zeros((N_g, N_p, N_t))
+    if u_op_file is None:
+        u = np.zeros((N_g, N_p, N_t))
+    else:
+        u = np.load(u_op_file)
 
     assert np.isclose(np.sum(ws_vacc), 0) or np.isclose(np.sum(ws_vacc), 1)
 
@@ -171,29 +177,30 @@ def forward_integration(u_con, c1, beta, c_gh, T, pop_hat, age_er,
     remain_last = 0
     # Forward integration for system of equations (1)
     for j in range(N_t-1):
-        # Sum the remaining vaccines from the last timestep if any
-        u_con_remain = u_con + remain_last
-        remain_last = 0
+        if u_op_file is None:
+            # Sum the remaining vaccines from the last timestep if any
+            u_con_remain = u_con + remain_last
+            remain_last = 0
 
-        # Checking which ervas have still people to be vaccinated
-        use_ervas = age_group_indicators != -1
+            # Checking which ervas have still people to be vaccinated
+            use_ervas = age_group_indicators != -1
 
-        # Proportional population of the ERVA
-        pops_erva_prop = np.zeros(pop_erva.shape)
-        # Only getting the missing ervas
-        use_pops = pop_erva[use_ervas]
-        # Normalizing with the population of the missing ervas
-        use_pops_prop = use_pops/np.sum(use_pops)
-        pops_erva_prop[use_ervas] = use_pops_prop
+            # Proportional population of the ERVA
+            pops_erva_prop = np.zeros(pop_erva.shape)
+            # Only getting the missing ervas
+            use_pops = pop_erva[use_ervas]
+            # Normalizing with the population of the missing ervas
+            use_pops_prop = use_pops/np.sum(use_pops)
+            pops_erva_prop[use_ervas] = use_pops_prop
 
-        # Get the normalized counts of infected people and hosp
-        hosp_norm, hosp = get_metric_erva_weigth(H_wg+H_cg+H_rg, j, delay_check_vacc, use_ervas)
-        infe_norm, infe = get_metric_erva_weigth(I_g, j, delay_check_vacc, use_ervas)
-        # Construct the final policy
-        policy = ws_vacc[0]*pops_erva_prop + ws_vacc[1]*infe_norm + ws_vacc[2]*hosp_norm
+            # Get the normalized counts of infected people and hosp
+            hosp_norm, hosp = get_metric_erva_weigth(H_wg+H_cg+H_rg, j, delay_check_vacc, use_ervas)
+            infe_norm, infe = get_metric_erva_weigth(I_g, j, delay_check_vacc, use_ervas)
+            # Construct the final policy
+            policy = ws_vacc[0]*pops_erva_prop + ws_vacc[1]*infe_norm + ws_vacc[2]*hosp_norm
 
-        # Get the vaccines assigned to each erva
-        u_erva = u_con_remain*policy
+            # Get the vaccines assigned to each erva
+            u_erva = u_con_remain*policy
 
         # Go over all ervas
         for n in range(N_p):
@@ -203,44 +210,45 @@ def forward_integration(u_con, c1, beta, c_gh, T, pop_hat, age_er,
                 lambda_g = force_of_inf(I_g[:, :, j], c_gh[:, g], n, N_g, N_p, c1, pop_hat)
                 L_g[g, n, j] = lambda_g
 
-                # Check if we still can vaccinate someone in this age group
-                if S_g[g, n, j] - beta*lambda_g*S_g[g, n, j] <= 0:
-                    # Continue to next age group
-                    age_group_indicators[n] = g - 1
-
-                    # If we reach here it means  that we have vaccines
-                    # that we are not going to use. Distribute to next erva
-                    if g == 0 and u_erva[n] != 0:
-                        if n+1 < N_p:
-                            u_erva[n+1] += u_erva[n]
-                        else:
-                            # If the next erva is the last one then to next timestep
-                            remain_last += u_erva[n]
-
-                # Assign the vaccines to the current age group and erva
-                age_group_indicator = age_group_indicators[n]
-                if age_group_indicator == g:
-                    # Get the total amount of vaccines
-                    u[g, n, j] += u_erva[n]/age_er[n, g]
-
-                    # Check for leftovers in the current age group
-                    all_aplied = S_g[g, n, j] - beta*lambda_g*S_g[g, n, j] - u[g, n, j]
-                    # We have some leftovers
-                    if all_aplied < 0:
-                        # Indicate that we should continue to next age group
+                if u_op_file is None:
+                    # Check if we still can vaccinate someone in this age group
+                    if S_g[g, n, j] - beta*lambda_g*S_g[g, n, j] <= 0:
+                        # Continue to next age group
                         age_group_indicators[n] = g - 1
-                        # Get the number of leftovers
-                        left_over = np.abs(all_aplied)
-                        left_over_real = left_over*age_er[n, g]
-                        # The next age group will only have the lefotvers
-                        if g-1 >= 0:
-                            u_erva[n] = left_over_real
-                        # If we finnish with the age groups then give to the next erva
-                        elif n+1 < N_p:
-                            u_erva[n+1] += left_over_real
-                        # If it was the last erva then keep the vaccines for next timestep
-                        else:
-                            remain_last += left_over_real
+
+                        # If we reach here it means  that we have vaccines
+                        # that we are not going to use. Distribute to next erva
+                        if g == 0 and u_erva[n] != 0:
+                            if n+1 < N_p:
+                                u_erva[n+1] += u_erva[n]
+                            else:
+                                # If the next erva is the last one then to next timestep
+                                remain_last += u_erva[n]
+
+                    # Assign the vaccines to the current age group and erva
+                    age_group_indicator = age_group_indicators[n]
+                    if age_group_indicator == g:
+                        # Get the total amount of vaccines
+                        u[g, n, j] += u_erva[n]/age_er[n, g]
+
+                        # Check for leftovers in the current age group
+                        all_aplied = S_g[g, n, j] - beta*lambda_g*S_g[g, n, j] - u[g, n, j]
+                        # We have some leftovers
+                        if all_aplied < 0:
+                            # Indicate that we should continue to next age group
+                            age_group_indicators[n] = g - 1
+                            # Get the number of leftovers
+                            left_over = np.abs(all_aplied)
+                            left_over_real = left_over*age_er[n, g]
+                            # The next age group will only have the lefotvers
+                            if g-1 >= 0:
+                                u_erva[n] = left_over_real
+                            # If we finnish with the age groups then give to the next erva
+                            elif n+1 < N_p:
+                                u_erva[n+1] += left_over_real
+                            # If it was the last erva then keep the vaccines for next timestep
+                            else:
+                                remain_last += left_over_real
 
                 # Ensures that we do not keep vaccinating after there are no susceptibles left
                 u[g, n, j] = min(u[g, n, j], max(0.0, S_g[g, n, j] - beta*lambda_g*S_g[g, n, j]))

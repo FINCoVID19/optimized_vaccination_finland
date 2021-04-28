@@ -9,7 +9,7 @@ import json
 
 
 def get_experiments_results(num_age_groups, num_ervas, e,
-                            init_vacc, strategies, u, T, r_experiments, t0):
+                            init_vacc, strategies, u, T, r_experiments, t0, u_op_file):
     mob_av, beta_gh, pop_erva_hat, age_er, rho = get_model_parameters(num_age_groups,
                                                                       num_ervas,
                                                                       init_vacc,
@@ -87,6 +87,38 @@ def get_experiments_results(num_age_groups, num_ervas, e,
             result_pairs = (label, results)
             results_label.append(result_pairs)
             j += 1
+        if r == 1.5:
+            _, _, H_wg, H_cg, H_rg, I_g, D_g, u_g, hops_i = forward_integration(
+                                                                u_con=u,
+                                                                c1=mob_av,
+                                                                beta=beta,
+                                                                c_gh=beta_gh,
+                                                                T=T,
+                                                                pop_hat=pop_erva_hat,
+                                                                age_er=age_er,
+                                                                t0=t0,
+                                                                ws_vacc=ws,
+                                                                e=e,
+                                                                init_vacc=init_vacc,
+                                                                u_op_file=u_op_file
+                                                            )
+            total_hosp = H_wg + H_cg + H_rg
+            deaths_incidence = D_g.copy()
+            deaths_incidence[:, :, 1:] -= D_g[:, :, :-1]
+
+            assert np.all(deaths_incidence.cumsum(axis=2) == D_g)
+
+            # print((u_g*age_er_prop).sum(axis=(0, 1)))
+            results = {
+                'hospitalizations': total_hosp*age_er_prop,
+                'infections': I_g*age_er_prop,
+                'deaths': D_g*age_er_prop,
+                'new deaths': deaths_incidence*age_er_prop,
+                'vaccinations': u_g*age_er_prop,
+                'new hospitalizations': hops_i*age_er_prop,
+            }
+            result_pairs = ('Optimal', results)
+            results_label.append(result_pairs)
         complete_results[r] = results_label
 
     return complete_results
@@ -126,7 +158,7 @@ def execute_parallel_forward(**params):
     return r_str, str(params['ws_vacc']), total_hosp, i_g, deaths_incidence, hops_i
 
 
-def search_best_ws_r_metric(filename, search_num=50):
+def search_best_ws_r_metric(filename, search_num=10):
     # Get the common parameters for all the experiments
     num_age_groups = EXPERIMENTS['num_age_groups']
     num_ervas = EXPERIMENTS['num_ervas']
@@ -147,15 +179,16 @@ def search_best_ws_r_metric(filename, search_num=50):
     w2 = np.linspace(0, 1-w1, search_num)
     # Constructs a dictionary with all betas and ws pairs to try
     all_params = {}
-    for i in range(search_num):
-        w1_i = w1[i]
-        for j in range(search_num):
-            # Getting w3 as a function of the other 2 ws
-            w2_i = w2[j, i]
-            w3_i = 1 - w1_i - w2_i
-            ws_i = [w1_i, w2_i, w3_i]
-            for r in r_experiments:
-                beta = r/rho
+    for r in r_experiments:
+        beta = r/rho
+        for i in range(search_num):
+            w1_i = w1[i]
+            for j in range(search_num):
+                # Getting w3 as a function of the other 2 ws
+                w2_i = w2[j, i]
+                w3_i = 1 - w1_i - w2_i
+                ws_i = [w1_i, w2_i, w3_i]
+
                 key = (str(r), str(ws_i))
                 parameters = {
                     'u_con': u,
@@ -172,6 +205,24 @@ def search_best_ws_r_metric(filename, search_num=50):
                     'r': str(r)
                 }
                 all_params[key] = parameters
+        # Adding the case manually
+        ws_i = [1, 0, 0]
+        key = (str(r), str(ws_i))
+        parameters = {
+            'u_con': u,
+            'c1': mob_av,
+            'beta': beta,
+            'c_gh': beta_gh,
+            'T': T,
+            'pop_hat': pop_erva_hat,
+            'age_er': age_er,
+            't0': t0,
+            'ws_vacc': ws_i,
+            'e': e,
+            'init_vacc': init_vacc,
+            'r': str(r)
+        }
+        all_params[key] = parameters
 
     # Running on all the available CPUs of the computer
     num_experiments = len(all_params.keys())
