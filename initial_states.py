@@ -189,5 +189,9 @@ if __name__ == "__main__":
         out_csv_filename = os.path.join(out_dir, 'epidemic_finland_9.csv')
         full_epidemic_state_finland(logger, erva_pop_file, out_csv_filename,
                                     number_age_groups=9)
+
+        out_csv_filename = os.path.join(out_dir, 'epidemic_finland_9_no_vacc.csv')
+        full_epidemic_state_finland(logger, erva_pop_file, out_csv_filename,
+                                    number_age_groups=9, init_vacc=False)
     except Exception:
         logger.exception("Fatal error in main loop")

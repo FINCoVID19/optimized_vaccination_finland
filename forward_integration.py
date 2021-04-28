@@ -9,16 +9,13 @@ from env_var import EPIDEMIC, EXPERIMENTS
 
 
 def forward_integration(u_con, c1, beta, c_gh, T, pop_hat, age_er,
-                        t0, policy='equal', checks=False,
-                        ws_vacc=EPIDEMIC['ws_vacc'], e=EPIDEMIC['e'],
-                        init_vacc=True):
+                        t0, ws_vacc, e, checks=False, init_vacc=True):
     # number of age groups and ervas
     num_ervas, num_age_groups = age_er.shape
     N_t = T
     N_p = num_ervas
     N_g = num_age_groups
 
-    ####################################################################
     # Time periods for epidemic
     T_E = EPIDEMIC['T_E']
     T_V = EPIDEMIC['T_V']
@@ -123,6 +120,8 @@ def forward_integration(u_con, c1, beta, c_gh, T, pop_hat, age_er,
     # Initialize vaccination rate
     u = np.zeros((N_g, N_p, N_t))
 
+    assert np.sum(ws_vacc) == 0 or np.sum(ws_vacc) == 1
+
     # Function to calculate the force of infection
     def force_of_inf(I_h, c_gh, k, N_g, N_p, mob, pop_hat):
         fi = 0.0
@@ -187,22 +186,14 @@ def forward_integration(u_con, c1, beta, c_gh, T, pop_hat, age_er,
         use_pops_prop = use_pops/np.sum(use_pops)
         pops_erva_prop[use_ervas] = use_pops_prop
 
-        # Deciding which policy to use
-        if policy == 'thl':
-            # If use THL then get the normalized counts of infected people and hosp
-            hosp_norm, hosp = get_metric_erva_weigth(H_wg+H_cg+H_rg, j, delay_check_vacc, use_ervas)
-            infe_norm, infe = get_metric_erva_weigth(I_g, j, delay_check_vacc, use_ervas)
-            # Construct the final weight
-            thl_weight = ws_vacc[0]*pops_erva_prop + ws_vacc[1]*hosp_norm + ws_vacc[2]*infe_norm
+        # Get the normalized counts of infected people and hosp
+        hosp_norm, hosp = get_metric_erva_weigth(H_wg+H_cg+H_rg, j, delay_check_vacc, use_ervas)
+        infe_norm, infe = get_metric_erva_weigth(I_g, j, delay_check_vacc, use_ervas)
+        # Construct the final policy
+        policy = ws_vacc[0]*pops_erva_prop + ws_vacc[1]*infe_norm + ws_vacc[2]*hosp_norm
 
-            # Get the vaccines assigned to each erva
-            u_erva = u_con_remain*thl_weight
-        elif policy == 'equal':
-            u_erva = u_con_remain*pops_erva_prop
-        elif policy == 'no_vacc':
-            u_erva = np.zeros(pop_erva.shape)
-        else:
-            raise ValueError('Policy not valid: %s' % (policy, ))
+        # Get the vaccines assigned to each erva
+        u_erva = u_con_remain*policy
 
         # Go over all ervas
         for n in range(N_p):
@@ -338,6 +329,7 @@ def get_model_parameters(number_age_groups, num_ervas, init_vacc, t0):
 
     m_av = m_av/pop_erva[:, np.newaxis]
 
+    # theta_km
     N_p = num_ervas
     N_g = number_age_groups
     mob_av = np.zeros((N_p, N_p))
@@ -349,8 +341,7 @@ def get_model_parameters(number_age_groups, num_ervas, init_vacc, t0):
             else:
                 mob_av[k, m] = r*m_av[k, m]
 
-    ####################################################################
-    # Equation (3) in overleaf (change in population size because of mobility)
+    # Change in population size because of mobility
     # N_hat_{lg}, N_hat_{l}
     pop_erva_hat = np.zeros(N_p)
     age_er_hat = np.zeros((N_g, N_p))
@@ -364,11 +355,10 @@ def get_model_parameters(number_age_groups, num_ervas, init_vacc, t0):
 
         pop_erva_hat[m] = m_k
 
-    ##############################################
     # Population size per age group in all ervas
     age_pop = sum(age_er)
 
-    # Computing beta_gh for force of infection ()
+    # Computing beta_gh for force of infection
     beta_gh = np.zeros((N_g, N_g))
 
     for g in range(N_g):
@@ -434,7 +424,6 @@ if __name__ == "__main__":
     reff = 1.5
     beta = reff/rho
     u = EXPERIMENTS['vaccines_per_day']
-    policy = 'equal'
     checks = False
     S_g, E_g, H_wg, H_cg, H_rg, I_g, D_g, u_g, hosp_g = forward_integration(
                                                             u_con=u,
@@ -445,7 +434,6 @@ if __name__ == "__main__":
                                                             pop_hat=pop_erva_hat,
                                                             age_er=age_er,
                                                             t0=t0,
-                                                            policy=policy,
                                                             init_vacc=init_vacc,
                                                             checks=checks
                                                         )

@@ -151,7 +151,17 @@ EXPERIMENTS = {
     'r_effs': [1.0, 1.25, 1.5, 2.0],
     'init_vacc': True,
     'num_ervas': 5,
-    'num_age_groups': 9
+    'num_age_groups': 9,
+    'strategies': [
+        ([1, 0, 0], 'Pop only'),
+        ([0, 0, 0], 'No vaccination'),
+        ([1/3, 1/3, 1/3], 'Pop, Inf and Hosp'),
+        ([1/2, 0, 1/2], 'Pop and Hosp'),
+        ([1/2, 1/2, 0], 'Pop and Inf'),
+        ([0, 1/2, 1/2], 'Hosp and Inf'),
+        ([0, 0, 1], 'Hosp only'),
+        ([0, 1, 0], 'Inf only'),
+    ],
 }
 
 EPIDEMIC = {
@@ -201,7 +211,6 @@ EPIDEMIC = {
         9: np.array([0, 0, 0, 0, 0, 0.01, 0.03, 0.05, 0.01])
     },
     'delay_check_vacc': 14,
-    'ws_vacc': [1/3, 1/3, 1/3],
     'contact_matrix': {
         8: np.array(([[1.30, 0.31, 0.23, 1.07, 0.51, 0.16, 0.14, 0.09],
                       [0.28, 1.39, 0.21, 0.16, 0.87, 0.44, 0.05, 0.04],
