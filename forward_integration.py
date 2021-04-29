@@ -111,6 +111,7 @@ def forward_integration(u_con, c1, beta, c_gh, T, pop_hat, age_er,
     S_vg = np.zeros((N_g, N_p, N_t))
 
     hospitalized_incidence = np.zeros((N_g, N_p, N_t))
+    infections_incidence = np.zeros((N_g, N_p, N_t))
 
     # I store the values for the force of infection (needed for the adjoint equations)
     L_g = np.zeros((N_g, N_p, N_t))
@@ -123,10 +124,9 @@ def forward_integration(u_con, c1, beta, c_gh, T, pop_hat, age_er,
     # Initialize vaccination rate
     if u_op_file is None:
         u = np.zeros((N_g, N_p, N_t))
+        assert np.isclose(np.sum(ws_vacc), 0) or np.isclose(np.sum(ws_vacc), 1)
     else:
         u = np.load(u_op_file)
-
-    assert np.isclose(np.sum(ws_vacc), 0) or np.isclose(np.sum(ws_vacc), 1)
 
     # Function to calculate the force of infection
     def force_of_inf(I_h, c_gh, k, N_g, N_p, mob, pop_hat):
@@ -269,8 +269,10 @@ def forward_integration(u_con, c1, beta, c_gh, T, pop_hat, age_er,
                 D_g[g, n, j+1] = D_g[g, n, j] + mu_q[g]*T_q0*Q_0g[g, n, j]+mu_w[g]*(1.-p_c[g])*T_hw*H_wg[g, n, j] + mu_c[g]*T_hc*H_cg[g, n, j]
 
                 hospitalized_incidence[g, n, j] = T_q1*Q_1g[g, n, j]
+                infections_incidence[g, n, j] = T_E*E_g[g, n, j]
 
     hospitalized_incidence[:, :, T-1] = T_q1*Q_1g[:, :, T-1]
+    infections_incidence[:, :, T-1] = T_E*E_g[:, :, T-1]
 
     if checks:
         # Final check to see that we always vaccinate u_con people
@@ -280,7 +282,7 @@ def forward_integration(u_con, c1, beta, c_gh, T, pop_hat, age_er,
         print(u_final)
         print(np.where(~np.isclose(u_final, u_con)))
 
-    return S_g, E_g, H_wg, H_cg, H_rg, I_g, D_g, u, hospitalized_incidence
+    return S_g, E_g, H_wg, H_cg, H_rg, I_g, D_g, u, hospitalized_incidence, infections_incidence
 
 
 def get_model_parameters(number_age_groups, num_ervas, init_vacc, t0):

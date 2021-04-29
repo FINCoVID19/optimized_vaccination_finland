@@ -161,6 +161,7 @@ EXPERIMENTS = {
         ([0, 1/2, 1/2], 'Hosp and Inf'),
         ([0, 0, 1], 'Hosp only'),
         ([0, 1, 0], 'Inf only'),
+        (None, 'Optimal')
     ],
 }
 
