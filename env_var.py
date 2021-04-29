@@ -148,9 +148,9 @@ EXPERIMENTS = {
     't0': '2021-04-18',
     'vaccines_per_day': 30000,
     'simulate_T': 115,
-    'r_effs': [0.75, 1.0, 1.25, 1.5, 2.0],
+    'r_effs': [0.75, 1.0, 1.25, 1.5],
     'init_vacc': True,
-    'inc_mob': True,
+    'taus': [0, 0.5, 1.0],
     'num_ervas': 5,
     'num_age_groups': 9,
     'strategies': [
@@ -190,7 +190,6 @@ EPIDEMIC = {
     'T_hr': 1.,
     'alpha': 0.9,
     'e': 0.7,
-    'r': 1./2.,
     'ervas_order': ['HYKS', 'TYKS', 'TAYS', 'KYS', 'OYS'],
     'mu_q': {
         8: np.array([0, 0, 0, 0, 0, 0, 0, 0.1]),

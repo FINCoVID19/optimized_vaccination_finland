@@ -9,7 +9,7 @@ from env_var import EPIDEMIC, EXPERIMENTS
 
 
 def forward_integration(u_con, c1, beta, c_gh, T, pop_hat, age_er,
-                        t0, ws_vacc, e, checks=False, init_vacc=True,
+                        t0, ws_vacc, e, epidemic_npy, init_vacc, checks=False,
                         u_op_file=None):
     # number of age groups and ervas
     num_ervas, num_age_groups = age_er.shape
@@ -39,41 +39,6 @@ def forward_integration(u_con, c1, beta, c_gh, T, pop_hat, age_er,
     p_c = EPIDEMIC['p_c'][num_age_groups]
     alpha = EPIDEMIC['alpha']
 
-    if init_vacc:
-        csv_name = 'out/epidemic_finland_%d.csv' % (num_age_groups, )
-    else:
-        csv_name = 'out/epidemic_finland_%d_no_vacc.csv' % (num_age_groups, )
-
-    # Reading CSV
-    epidemic_csv = pd.read_csv(csv_name)
-    # Getting only date t0
-    epidemic_zero = epidemic_csv.loc[epidemic_csv['date'] == t0, :]
-    # Removing Ahvenanmaa or Aland
-    epidemic_zero = epidemic_zero[~epidemic_zero['erva'].str.contains('land')]
-
-    # Getting the order the ervas have inside the dataframe
-    ervas_order = EPIDEMIC['ervas_order']
-    ervas_df = list(pd.unique(epidemic_zero['erva']))
-    ervas_pd_order = [ervas_df.index(erva) for erva in ervas_order]
-
-    select_columns = ['susceptible',
-                      'infected',
-                      'exposed',
-                      'recovered',
-                      'vaccinated',
-                      'vaccinated no imm',
-                      'ward',
-                      'icu']
-    # Selecting the columns to use
-    epidemic_zero = epidemic_zero[select_columns]
-    # Converting to numpy
-    epidemic_npy = epidemic_zero.values
-    # Reshaping to 3d array
-    epidemic_npy = epidemic_npy.reshape(N_p, N_g, len(select_columns))
-
-    # Rearranging the order of the matrix with correct order
-    epidemic_npy = epidemic_npy[ervas_pd_order, :]
-
     # Allocating space for compartments
     S_g = np.zeros((N_g, N_p, N_t))
     I_g = np.zeros((N_g, N_p, N_t))
@@ -83,15 +48,11 @@ def forward_integration(u_con, c1, beta, c_gh, T, pop_hat, age_er,
     H_wg = np.zeros((N_g, N_p, N_t))
     H_cg = np.zeros((N_g, N_p, N_t))
     S_xg = np.zeros((N_g, N_p, N_t))
-
-    # Adding 1 dimension to age_er to do array division
-    age_er_div = age_er[:, :, np.newaxis]
-    # Dividing to get the proportion
-    epidemic_npy = epidemic_npy/age_er_div
-
-    # epidemic_npy has num_ervas first, compartmetns have age first
-    # Transposing to epidemic_npy to accomodate to compartments
-    epidemic_npy = epidemic_npy.transpose(1, 0, 2)
+    D_g = np.zeros((N_g, N_p, N_t))
+    Q_0g = np.zeros((N_g, N_p, N_t))
+    Q_1g = np.zeros((N_g, N_p, N_t))
+    H_rg = np.zeros((N_g, N_p, N_t))
+    S_vg = np.zeros((N_g, N_p, N_t))
 
     # Initializing with CSV values
     S_g[:, :, 0] = epidemic_npy[:, :, 0]
@@ -102,13 +63,6 @@ def forward_integration(u_con, c1, beta, c_gh, T, pop_hat, age_er,
     S_xg[:, :, 0] = epidemic_npy[:, :, 5]
     H_wg[:, :, 0] = epidemic_npy[:, :, 6]
     H_cg[:, :, 0] = epidemic_npy[:, :, 7]
-
-    # Initializing the rest of compartments to zero
-    D_g = np.zeros((N_g, N_p, N_t))
-    Q_0g = np.zeros((N_g, N_p, N_t))
-    Q_1g = np.zeros((N_g, N_p, N_t))
-    H_rg = np.zeros((N_g, N_p, N_t))
-    S_vg = np.zeros((N_g, N_p, N_t))
 
     hospitalized_incidence = np.zeros((N_g, N_p, N_t))
     infections_incidence = np.zeros((N_g, N_p, N_t))
@@ -285,7 +239,59 @@ def forward_integration(u_con, c1, beta, c_gh, T, pop_hat, age_er,
     return S_g, E_g, H_wg, H_cg, H_rg, I_g, D_g, u, hospitalized_incidence, infections_incidence
 
 
-def get_model_parameters(number_age_groups, num_ervas, init_vacc, t0, inc_mob):
+def read_initial_values(age_er, init_vacc, t0):
+    num_ervas, num_age_groups = age_er.shape
+    N_p = num_ervas
+    N_g = num_age_groups
+
+    if init_vacc:
+        csv_name = 'out/epidemic_finland_%d.csv' % (num_age_groups, )
+    else:
+        csv_name = 'out/epidemic_finland_%d_no_vacc.csv' % (num_age_groups, )
+
+    # Reading CSV
+    epidemic_csv = pd.read_csv(csv_name)
+    # Getting only date t0
+    epidemic_zero = epidemic_csv.loc[epidemic_csv['date'] == t0, :]
+    # Removing Ahvenanmaa or Aland
+    epidemic_zero = epidemic_zero[~epidemic_zero['erva'].str.contains('land')]
+
+    # Getting the order the ervas have inside the dataframe
+    ervas_order = EPIDEMIC['ervas_order']
+    ervas_df = list(pd.unique(epidemic_zero['erva']))
+    ervas_pd_order = [ervas_df.index(erva) for erva in ervas_order]
+
+    select_columns = ['susceptible',
+                      'infected',
+                      'exposed',
+                      'recovered',
+                      'vaccinated',
+                      'vaccinated no imm',
+                      'ward',
+                      'icu']
+    # Selecting the columns to use
+    epidemic_zero = epidemic_zero[select_columns]
+    # Converting to numpy
+    epidemic_npy = epidemic_zero.values
+    # Reshaping to 3d array
+    epidemic_npy = epidemic_npy.reshape(N_p, N_g, len(select_columns))
+
+    # Rearranging the order of the matrix with correct order
+    epidemic_npy = epidemic_npy[ervas_pd_order, :]
+
+    # Adding 1 dimension to age_er to do array division
+    age_er_div = age_er[:, :, np.newaxis]
+    # Dividing to get the proportion
+    epidemic_npy = epidemic_npy/age_er_div
+
+    # epidemic_npy has num_ervas first, compartmetns have age first
+    # Transposing to epidemic_npy to accomodate to compartments
+    epidemic_npy = epidemic_npy.transpose(1, 0, 2)
+
+    return epidemic_npy
+
+
+def get_model_parameters(number_age_groups, num_ervas, init_vacc, t0, tau):
     logger = logging.getLogger()
     erva_pop_file = 'stats/erva_population_age_2020.csv'
     pop_ervas_age, _ = static_population_erva_age(logger, erva_pop_file,
@@ -336,10 +342,6 @@ def get_model_parameters(number_age_groups, num_ervas, init_vacc, t0, inc_mob):
 
     # Mobility matrix
     m_av = EPIDEMIC['mobility_matrix'][num_ervas]
-    r = EPIDEMIC['r']
-    if not inc_mob:
-        r = 0
-        m_av[:] = 0
 
     m_av = m_av/pop_erva[:, np.newaxis]
 
@@ -350,9 +352,9 @@ def get_model_parameters(number_age_groups, num_ervas, init_vacc, t0, inc_mob):
     for k in range(N_p):
         for m in range(N_p):
             if k == m:
-                mob_av[k, m] = (1.-r) + r*m_av[k, m]
+                mob_av[k, m] = (1-tau) + tau*m_av[k, m]
             else:
-                mob_av[k, m] = r*m_av[k, m]
+                mob_av[k, m] = tau*m_av[k, m]
 
     # Change in population size because of mobility
     # N_hat_{lg}, N_hat_{l}

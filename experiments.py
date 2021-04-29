@@ -1,4 +1,6 @@
-from forward_integration import forward_integration, get_model_parameters
+from forward_integration import (
+    forward_integration, get_model_parameters, read_initial_values
+)
 import numpy as np
 from env_var import EPIDEMIC, EXPERIMENTS
 from multiprocessing import Pool
@@ -8,29 +10,18 @@ import datetime
 import json
 
 
-def get_experiments_results(num_age_groups, num_ervas, e, inc_mob,
+def get_experiments_results(num_age_groups, num_ervas, e, taus,
                             init_vacc, strategies, u, T, r_experiments, t0):
-    mob_av, beta_gh, pop_erva_hat, age_er, rho = get_model_parameters(num_age_groups,
-                                                                      num_ervas,
-                                                                      init_vacc,
-                                                                      t0,
-                                                                      inc_mob)
-    age_er_prop = age_er.T
-    age_er_prop = age_er_prop[:, :, np.newaxis]
-    complete_results = {}
-    total_rs = len(r_experiments)
-
     experiments_params = {
         'num_ervas': num_ervas,
         'num_age_groups': num_age_groups,
         'u': u,
-        'rho': rho,
         't0': t0,
         'T': T,
         'e': e,
         'r_experiments': r_experiments,
         'init_vacc': init_vacc,
-        'inc_mob': inc_mob,
+        'taus': taus,
         'strategies': strategies
     }
     print(('Beginning experiments.\n'
@@ -38,95 +29,114 @@ def get_experiments_results(num_age_groups, num_ervas, e, inc_mob,
            'Number of age ervas: {num_ervas}.\n'
            'Number of age groups: {num_age_groups}.\n'
            'Number of vaccines per day: {u}.\n'
-           'rho: {rho}.\n'
            't0: {t0}.\n'
            'T: {T}.\n'
            'Vaccine efficacy (e): {e}.\n'
            'Rs to try: {r_experiments}.\n'
+           'Taus to try: {taus}.\n'
            'Initialize with vaccinated people: {init_vacc}.\n'
-           'Include mobility: {inc_mob}.\n'
            'Strategies:\n{strategies}.\n').format(**experiments_params))
 
-    for i, r in enumerate(r_experiments):
-        beta = r/rho
-        results_label = []
-        j = 1
-        total_strategies = len(strategies)
-        for ws, label in strategies:
-            if label == 'Optimal':
-                u_op_file = 'out/R_%s_op_sol.npy' % (r, )
-                if os.path.isfile(u_op_file):
-                    ws = u_op_file
-                    _, _, H_wg, H_cg, H_rg, I_g, D_g, u_g, hops_i, infs_i = forward_integration(
-                                                                        u_con=u,
-                                                                        c1=mob_av,
-                                                                        beta=beta,
-                                                                        c_gh=beta_gh,
-                                                                        T=T,
-                                                                        pop_hat=pop_erva_hat,
-                                                                        age_er=age_er,
-                                                                        t0=t0,
-                                                                        ws_vacc=None,
-                                                                        e=e,
-                                                                        init_vacc=init_vacc,
-                                                                        u_op_file=u_op_file
-                                                                    )
-            else:
-                _, _, H_wg, H_cg, H_rg, I_g, D_g, u_g, hops_i, infs_i = forward_integration(
-                                                                    u_con=u,
-                                                                    c1=mob_av,
-                                                                    beta=beta,
-                                                                    c_gh=beta_gh,
-                                                                    T=T,
-                                                                    pop_hat=pop_erva_hat,
-                                                                    age_er=age_er,
-                                                                    t0=t0,
-                                                                    ws_vacc=ws,
-                                                                    e=e,
-                                                                    init_vacc=init_vacc,
-                                                                    u_op_file=None
-                                                        )
-            if ws is not None:
-                total_hosp = H_wg + H_cg + H_rg
-                deaths_incidence = D_g.copy()
-                deaths_incidence[:, :, 1:] -= D_g[:, :, :-1]
+    tau_params = {tau: {} for tau in taus}
+    for tau in taus:
+        mob_av, beta_gh, pop_erva_hat, age_er, rho = get_model_parameters(num_age_groups,
+                                                                          num_ervas,
+                                                                          init_vacc,
+                                                                          t0,
+                                                                          tau)
+        tau_params[tau]['mob_av'] = mob_av
+        tau_params[tau]['beta_gh'] = beta_gh
+        tau_params[tau]['pop_erva_hat'] = pop_erva_hat
+        tau_params[tau]['rho'] = rho
 
-                assert np.all(deaths_incidence.cumsum(axis=2) == D_g)
+    epidemic_npy = read_initial_values(age_er, init_vacc, t0)
 
-                results = {
-                    'hospitalizations': total_hosp*age_er_prop,
-                    'infectious': I_g*age_er_prop,
-                    'infections': infs_i*age_er_prop,
-                    'deaths': D_g*age_er_prop,
-                    'new deaths': deaths_incidence*age_er_prop,
-                    'vaccinations': u_g*age_er_prop,
-                    'new hospitalizations': hops_i*age_er_prop,
-                }
-                result_pairs = (label, results)
-                results_label.append(result_pairs)
-            print('Finished R: %s. Beta: %s %d/%d. Policy: %s. %d/%d' % (r,
-                                                                         beta,
-                                                                         i+1,
-                                                                         total_rs,
-                                                                         label,
-                                                                         j,
-                                                                         total_strategies))
-            j += 1
-        complete_results[r] = results_label
+    age_er_prop = age_er.T
+    age_er_prop = age_er_prop[:, :, np.newaxis]
 
-    return complete_results
+    experiments = {r: {tau: {} for tau in taus} for r in r_experiments}
+    num_experiments = 0
+    for tau in taus:
+        for r in r_experiments:
+            beta = r/tau_params[tau]['rho']
+            for ws, label in strategies:
+                if label == 'Optimal':
+                    u_op_file = 'out/R_%s_op_sol.npy' % (r, )
+                    if os.path.isfile(u_op_file):
+                        exec_experiment = True
+                    else:
+                        u_op_file = None
+                        exec_experiment = False
+                else:
+                    exec_experiment = True
+                    u_op_file = None
+
+                if exec_experiment:
+                    num_experiments += 1
+                    parameters = {
+                        'u_con': u,
+                        'c1': tau_params[tau]['mob_av'],
+                        'beta': beta,
+                        'c_gh': tau_params[tau]['beta_gh'],
+                        'T': T,
+                        'pop_hat': tau_params[tau]['pop_erva_hat'],
+                        'age_er': age_er,
+                        't0': t0,
+                        'ws_vacc': ws,
+                        'e': e,
+                        'init_vacc': init_vacc,
+                        'epidemic_npy': epidemic_npy,
+                        'u_op_file': u_op_file,
+                        'num_exp': num_experiments,
+                        'r': r,
+                        'tau': tau,
+                        'label': label
+                    }
+                    experiments[r][tau][label] = {}
+                    experiments[r][tau][label]['parameters'] = parameters
+
+    num_cpus = os.cpu_count()
+    start_time = time.time()
+    print('Running %s experiments with %s CPUS.' % (num_experiments, num_cpus))
+    with Pool(processes=num_cpus) as pool:
+        # Calling the function to execute forward simulation in asynchronous way
+        async_res = []
+        for r, r_level in experiments.items():
+            for tau, tau_level in r_level.items():
+                for label, label_level in tau_level.items():
+                    policy_params = label_level['parameters']
+                    async_res.append(
+                        pool.apply_async(execute_parallel_forward,
+                                         kwds=policy_params)
+                    )
+
+        # Waiting for the values of the async execution
+        for res in async_res:
+            r, tau, label, results = res.get()
+            # Adding the results to our dictionary
+            experiments[r][tau][label]['results'] = results
+    elapsed_time = time.time() - start_time
+    elapsed_delta = datetime.timedelta(seconds=elapsed_time)
+    print('Finished experiments. Elapsed: %s' % (elapsed_delta, ))
+
+    return experiments
 
 
 def execute_parallel_forward(**params):
     # Function that executes in parallel the forward simulations
     start_time = time.time()
     proc_number = os.getpid()
-    r_str = params.pop('r')
-    print('Start execution in process: %s.\nR: %s. Ws: %s' % (proc_number,
-                                                              r_str,
-                                                              params['ws_vacc']))
+    num_exp = params.pop('num_exp')
+    r = params.pop('r')
+    tau = params.pop('tau')
+    label = params.pop('label')
+    print('Start (%s). Exp: %s. R: %s. tau: %s. Policy: %s' % (proc_number,
+                                                               num_exp,
+                                                               r,
+                                                               tau,
+                                                               label))
 
-    _, _, H_wg, H_cg, H_rg, I_g, D_g, _, hops_i, infs_i = forward_integration(**params)
+    _, _, H_wg, H_cg, H_rg, I_g, D_g, u_g, hops_i, infs_i = forward_integration(**params)
 
     age_er_prop = params['age_er'].T
     age_er_prop = age_er_prop[:, :, np.newaxis]
@@ -138,18 +148,23 @@ def execute_parallel_forward(**params):
     assert np.all(deaths_incidence.cumsum(axis=2) == D_g)
 
     # Getting the results in the absolute scale (not age region proportioned)
-    total_hosp = total_hosp*age_er_prop
-    i_g = I_g*age_er_prop
-    deaths_incidence = deaths_incidence*age_er_prop
-    hops_i = hops_i*age_er_prop
-    infs_i = infs_i*age_er_prop
+    results = {
+        'total hospitalizations': total_hosp*age_er_prop,
+        'infectious': I_g*age_er_prop,
+        'infections': infs_i*age_er_prop,
+        'deaths': D_g*age_er_prop,
+        'new deaths': deaths_incidence*age_er_prop,
+        'vaccinations': u_g*age_er_prop,
+        'new hospitalizations': hops_i*age_er_prop,
+    }
 
     elapsed_time = time.time() - start_time
     elapsed_delta = datetime.timedelta(seconds=elapsed_time)
-    print('Finished execution in process: %s. Elapsed: %s' % (proc_number,
-                                                              elapsed_delta))
+    print('Finished (%s). Exp: %s. Elapsed: %s' % (proc_number,
+                                                   num_exp,
+                                                   elapsed_delta))
 
-    return r_str, str(params['ws_vacc']), total_hosp, i_g, deaths_incidence, hops_i, infs_i
+    return r, tau, label, results
 
 
 def search_best_ws_r_metric(filename, search_num=10):
