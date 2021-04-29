@@ -54,7 +54,7 @@ def get_experiments_results(num_age_groups, num_ervas, e, inc_mob,
         total_strategies = len(strategies)
         for ws, label in strategies:
             if label == 'Optimal':
-                u_op_file = 'out/op_sol_%s.npy' % (r, )
+                u_op_file = 'out/R_%s_op_sol.npy' % (r, )
                 if os.path.isfile(u_op_file):
                     ws = u_op_file
                     _, _, H_wg, H_cg, H_rg, I_g, D_g, u_g, hops_i, infs_i = forward_integration(
