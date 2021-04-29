@@ -150,6 +150,7 @@ EXPERIMENTS = {
     'simulate_T': 115,
     'r_effs': [0.75, 1.0, 1.25, 1.5, 2.0],
     'init_vacc': True,
+    'inc_mob': True,
     'num_ervas': 5,
     'num_age_groups': 9,
     'strategies': [

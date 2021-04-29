@@ -285,7 +285,7 @@ def forward_integration(u_con, c1, beta, c_gh, T, pop_hat, age_er,
     return S_g, E_g, H_wg, H_cg, H_rg, I_g, D_g, u, hospitalized_incidence, infections_incidence
 
 
-def get_model_parameters(number_age_groups, num_ervas, init_vacc, t0):
+def get_model_parameters(number_age_groups, num_ervas, init_vacc, t0, inc_mob):
     logger = logging.getLogger()
     erva_pop_file = 'stats/erva_population_age_2020.csv'
     pop_ervas_age, _ = static_population_erva_age(logger, erva_pop_file,
@@ -336,6 +336,10 @@ def get_model_parameters(number_age_groups, num_ervas, init_vacc, t0):
 
     # Mobility matrix
     m_av = EPIDEMIC['mobility_matrix'][num_ervas]
+    r = EPIDEMIC['r']
+    if not inc_mob:
+        r = 0
+        m_av[:] = 0
 
     m_av = m_av/pop_erva[:, np.newaxis]
 
@@ -343,7 +347,6 @@ def get_model_parameters(number_age_groups, num_ervas, init_vacc, t0):
     N_p = num_ervas
     N_g = number_age_groups
     mob_av = np.zeros((N_p, N_p))
-    r = EPIDEMIC['r']
     for k in range(N_p):
         for m in range(N_p):
             if k == m:
@@ -418,11 +421,13 @@ if __name__ == "__main__":
     num_ervas = EXPERIMENTS['num_ervas']
     t0 = EXPERIMENTS['t0']
     init_vacc = EXPERIMENTS['init_vacc']
+    inc_mob = EXPERIMENTS['inc_mob']
 
     mob_av, beta_gh, pop_erva_hat, age_er, rho = get_model_parameters(num_age_groups,
                                                                       num_ervas,
                                                                       init_vacc,
-                                                                      t0)
+                                                                      t0,
+                                                                      inc_mob)
 
     rs = EXPERIMENTS['r_effs']
     print('rho: %f' % (rho, ))

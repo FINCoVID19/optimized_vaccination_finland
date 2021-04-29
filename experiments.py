@@ -8,12 +8,13 @@ import datetime
 import json
 
 
-def get_experiments_results(num_age_groups, num_ervas, e,
+def get_experiments_results(num_age_groups, num_ervas, e, inc_mob,
                             init_vacc, strategies, u, T, r_experiments, t0):
     mob_av, beta_gh, pop_erva_hat, age_er, rho = get_model_parameters(num_age_groups,
                                                                       num_ervas,
                                                                       init_vacc,
-                                                                      t0)
+                                                                      t0,
+                                                                      inc_mob)
     age_er_prop = age_er.T
     age_er_prop = age_er_prop[:, :, np.newaxis]
     complete_results = {}
@@ -29,6 +30,7 @@ def get_experiments_results(num_age_groups, num_ervas, e,
         'e': e,
         'r_experiments': r_experiments,
         'init_vacc': init_vacc,
+        'inc_mob': inc_mob,
         'strategies': strategies
     }
     print(('Beginning experiments.\n'
@@ -42,6 +44,7 @@ def get_experiments_results(num_age_groups, num_ervas, e,
            'Vaccine efficacy (e): {e}.\n'
            'Rs to try: {r_experiments}.\n'
            'Initialize with vaccinated people: {init_vacc}.\n'
+           'Include mobility: {inc_mob}.\n'
            'Strategies:\n{strategies}.\n').format(**experiments_params))
 
     for i, r in enumerate(r_experiments):
@@ -155,6 +158,7 @@ def search_best_ws_r_metric(filename, search_num=10):
     num_ervas = EXPERIMENTS['num_ervas']
     T = EXPERIMENTS['simulate_T']
     init_vacc = EXPERIMENTS['init_vacc']
+    inc_mob = EXPERIMENTS['inc_mob']
     u = EXPERIMENTS['vaccines_per_day']
     r_experiments = EXPERIMENTS['r_effs']
     t0 = EXPERIMENTS['t0']
@@ -164,7 +168,8 @@ def search_best_ws_r_metric(filename, search_num=10):
     mob_av, beta_gh, pop_erva_hat, age_er, rho = get_model_parameters(num_age_groups,
                                                                       num_ervas,
                                                                       init_vacc,
-                                                                      t0)
+                                                                      t0,
+                                                                      inc_mob)
     # Constructing ws. Endpoint=False avoids the case 1, 0, 0
     w1 = np.linspace(0, 1, search_num, endpoint=False)
     w2 = np.linspace(0, 1-w1, search_num)
