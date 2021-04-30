@@ -150,10 +150,9 @@ def execute_parallel_forward(**params):
     # Getting the results in the absolute scale (not age region proportioned)
     results = {
         'total hospitalizations': total_hosp*age_er_prop,
-        'infectious': I_g*age_er_prop,
+        'infectious people': I_g*age_er_prop,
         'infections': infs_i*age_er_prop,
-        'deaths': D_g*age_er_prop,
-        'new deaths': deaths_incidence*age_er_prop,
+        'deaths': deaths_incidence*age_er_prop,
         'vaccinations': u_g*age_er_prop,
         'new hospitalizations': hops_i*age_er_prop,
     }
