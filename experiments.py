@@ -167,17 +167,6 @@ def execute_parallel_forward(**params):
 
 def search_best_ws_r_metric(num_age_groups, num_ervas, init_vacc,
                             u, T, r_experiments, t0, e, taus, search_num_ws):
-    # Get the common parameters for all the experiments
-    num_age_groups = EXPERIMENTS['num_age_groups']
-    num_ervas = EXPERIMENTS['num_ervas']
-    T = EXPERIMENTS['simulate_T']
-    init_vacc = EXPERIMENTS['init_vacc']
-    taus = EXPERIMENTS['taus']
-    u = EXPERIMENTS['vaccines_per_day']
-    r_experiments = EXPERIMENTS['r_effs']
-    t0 = EXPERIMENTS['t0']
-    e = EPIDEMIC['e']
-
     # Constructing ws. Endpoint=False avoids the case 1, 0, 0
     w1 = np.linspace(0, 1, search_num_ws)
 
