@@ -7,7 +7,6 @@ from multiprocessing import Pool
 import os
 import time
 import datetime
-import json
 
 
 def get_experiments_results(num_age_groups, num_ervas, e, taus,
@@ -166,127 +165,93 @@ def execute_parallel_forward(**params):
     return r, tau, label, results
 
 
-def search_best_ws_r_metric(filename, search_num=10):
+def search_best_ws_r_metric(num_age_groups, num_ervas, init_vacc,
+                            u, T, r_experiments, t0, e, taus, search_num_ws):
     # Get the common parameters for all the experiments
     num_age_groups = EXPERIMENTS['num_age_groups']
     num_ervas = EXPERIMENTS['num_ervas']
     T = EXPERIMENTS['simulate_T']
     init_vacc = EXPERIMENTS['init_vacc']
-    inc_mob = EXPERIMENTS['inc_mob']
+    taus = EXPERIMENTS['taus']
     u = EXPERIMENTS['vaccines_per_day']
     r_experiments = EXPERIMENTS['r_effs']
     t0 = EXPERIMENTS['t0']
     e = EPIDEMIC['e']
 
-    # Calculate the values with the parameters
-    mob_av, beta_gh, pop_erva_hat, age_er, rho = get_model_parameters(num_age_groups,
-                                                                      num_ervas,
-                                                                      init_vacc,
-                                                                      t0,
-                                                                      inc_mob)
     # Constructing ws. Endpoint=False avoids the case 1, 0, 0
-    w1 = np.linspace(0, 1, search_num, endpoint=False)
-    w2 = np.linspace(0, 1-w1, search_num)
-    # Constructs a dictionary with all betas and ws pairs to try
-    all_params = {}
-    for r in r_experiments:
-        beta = r/rho
-        for i in range(search_num):
-            w1_i = w1[i]
-            for j in range(search_num):
-                # Getting w3 as a function of the other 2 ws
-                w2_i = w2[j, i]
-                w3_i = 1 - w1_i - w2_i
-                ws_i = [w1_i, w2_i, w3_i]
+    w1 = np.linspace(0, 1, search_num_ws)
 
-                key = (str(r), str(ws_i))
+    tau_params = {tau: {} for tau in taus}
+    for tau in taus:
+        mob_av, beta_gh, pop_erva_hat, age_er, rho = get_model_parameters(num_age_groups,
+                                                                          num_ervas,
+                                                                          init_vacc,
+                                                                          t0,
+                                                                          tau)
+        tau_params[tau]['mob_av'] = mob_av
+        tau_params[tau]['beta_gh'] = beta_gh
+        tau_params[tau]['pop_erva_hat'] = pop_erva_hat
+        tau_params[tau]['rho'] = rho
+
+    epidemic_npy = read_initial_values(age_er, init_vacc, t0)
+
+    age_er_prop = age_er.T
+    age_er_prop = age_er_prop[:, :, np.newaxis]
+
+    experiments = {r: {tau: {} for tau in taus} for r in r_experiments}
+    num_experiments = 0
+    for tau in taus:
+        for r in r_experiments:
+            beta = r/tau_params[tau]['rho']
+            for w in w1:
+                num_experiments += 1
+                ws = [w, 1-w, 0]
+                label = str(w)
                 parameters = {
                     'u_con': u,
-                    'c1': mob_av,
+                    'c1': tau_params[tau]['mob_av'],
                     'beta': beta,
-                    'c_gh': beta_gh,
+                    'c_gh': tau_params[tau]['beta_gh'],
                     'T': T,
-                    'pop_hat': pop_erva_hat,
+                    'pop_hat': tau_params[tau]['pop_erva_hat'],
                     'age_er': age_er,
                     't0': t0,
-                    'ws_vacc': ws_i,
+                    'ws_vacc': ws,
                     'e': e,
                     'init_vacc': init_vacc,
-                    'r': str(r)
+                    'epidemic_npy': epidemic_npy,
+                    'u_op_file': None,
+                    'num_exp': num_experiments,
+                    'r': r,
+                    'tau': tau,
+                    'label': label
                 }
-                all_params[key] = parameters
-        # Adding the case manually
-        ws_i = [1, 0, 0]
-        key = (str(r), str(ws_i))
-        parameters = {
-            'u_con': u,
-            'c1': mob_av,
-            'beta': beta,
-            'c_gh': beta_gh,
-            'T': T,
-            'pop_hat': pop_erva_hat,
-            'age_er': age_er,
-            't0': t0,
-            'ws_vacc': ws_i,
-            'e': e,
-            'init_vacc': init_vacc,
-            'r': str(r)
-        }
-        all_params[key] = parameters
+                experiments[r][tau][label] = {}
+                experiments[r][tau][label]['parameters'] = parameters
 
     # Running on all the available CPUs of the computer
-    num_experiments = len(all_params.keys())
     num_cpus = os.cpu_count()
     start_time = time.time()
     print('Running %s experiments with %s CPUS.' % (num_experiments, num_cpus))
     with Pool(processes=num_cpus) as pool:
         # Calling the function to execute forward simulation in asynchronous way
-        async_res = [pool.apply_async(execute_parallel_forward, kwds=params)
-                     for params in all_params.values()]
+        async_res = []
+        for r, r_level in experiments.items():
+            for tau, tau_level in r_level.items():
+                for label, label_level in tau_level.items():
+                    policy_params = label_level['parameters']
+                    async_res.append(
+                        pool.apply_async(execute_parallel_forward,
+                                         kwds=policy_params)
+                    )
+
         # Waiting for the values of the async execution
         for res in async_res:
-            r_str, ws, total_hosp, i_g, deaths_inc, hops_i, infs_i = res.get()
+            r, tau, label, results = res.get()
             # Adding the results to our dictionary
-            all_params[(r_str, ws)]['results'] = {
-                'total_hosp': total_hosp,
-                'infectious': i_g,
-                'deaths_inc': deaths_inc,
-                'hosp_inc': hops_i,
-                'infections': infs_i
-            }
+            experiments[r][tau][label]['results'] = results
     elapsed_time = time.time() - start_time
     elapsed_delta = datetime.timedelta(seconds=elapsed_time)
     print('Finished experiments. Elapsed: %s' % (elapsed_delta, ))
 
-    # Constructing a dictionary to store the best results for r, metric and ws
-    first_key = list(all_params.keys())[0]
-    results_keys = all_params[first_key]['results'].keys()
-    best_results = {key: {} for key in results_keys}
-    for metric, empty_dic in best_results.items():
-        for r in r_experiments:
-            r_str = str(r)
-            empty_dic[r_str] = {
-                'best': np.inf,
-                'ws': None
-            }
-
-    # Searching for the best results
-    for key_beta_ws, params_results in all_params.items():
-        r_str, _ = key_beta_ws
-        for metric, values in best_results.items():
-            # Getting the result of the metric
-            res_beta_ws = params_results['results'][metric]
-            overall_result = res_beta_ws.sum()
-            # Checking if we did better than before
-            if overall_result < values[r_str]['best']:
-                values[r_str]['best'] = overall_result
-                values[r_str]['ws'] = params_results['ws_vacc']
-
-    # Storing the results in a JSON file
-    with open(filename, 'w') as f:
-        json.dump(best_results, f, indent=2)
-    print('Results written to file: %s' % (filename, ))
-
-
-if __name__ == "__main__":
-    search_best_ws_r_metric('out/best_ws.json')
+    return experiments

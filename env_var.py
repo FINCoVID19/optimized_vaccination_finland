@@ -164,6 +164,7 @@ EXPERIMENTS = {
         ([0, 1, 0], 'Inf only'),
         (None, 'Optimal')
     ],
+    'search_num_ws': 10,
 }
 
 EPIDEMIC = {

@@ -3,6 +3,7 @@ __pycache__
 .DS_Store
 
 Untitled.ipynb
+compare_infections_diff_rs.ipynb
 
 env
 *.log
