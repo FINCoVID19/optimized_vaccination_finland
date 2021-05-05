@@ -1,9 +1,15 @@
+# Cache files
 .ipynb_checkpoints
 __pycache__
 .DS_Store
 
+# NB used for testing
 Untitled.ipynb
 compare_infections_diff_rs.ipynb
 
+# Local env files
 env
 *.log
+
+# Vaccination policies
+u_*.npy

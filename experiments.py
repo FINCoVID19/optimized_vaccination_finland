@@ -2,7 +2,6 @@ from forward_integration import (
     forward_integration, get_model_parameters, read_initial_values
 )
 import numpy as np
-from env_var import EPIDEMIC, EXPERIMENTS
 from multiprocessing import Pool
 import os
 import time
@@ -59,7 +58,8 @@ def get_experiments_results(num_age_groups, num_ervas, e, taus,
         for r in r_experiments:
             beta = r/tau_params[tau]['rho']
             for ws, label in strategies:
-                if label == 'Optimal':
+                # ws is None mean go to optimized strategy
+                if ws is None:
                     u_op_file = 'out/R_%s_op_sol.npy' % (r, )
                     if os.path.isfile(u_op_file):
                         exec_experiment = True
@@ -153,6 +153,7 @@ def execute_parallel_forward(**params):
         'infections': infs_i*age_er_prop,
         'deaths': deaths_incidence*age_er_prop,
         'vaccinations': u_g*age_er_prop,
+        'vaccinations_raw': u_g,
         'new hospitalizations': hops_i*age_er_prop,
     }
 

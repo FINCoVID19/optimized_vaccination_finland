@@ -325,10 +325,17 @@ def get_model_parameters(number_age_groups, num_ervas, init_vacc, t0, tau):
     ervas_df = list(pd.unique(epidemic_zero['erva']))
     ervas_pd_order = [ervas_df.index(erva) for erva in ervas_order]
 
+    select_columns = ['susceptible',
+                      'vaccinated no imm']
     # Selecting the columns to use
-    epidemic_zero = epidemic_zero[['susceptible']]
+    epidemic_zero = epidemic_zero[select_columns]
     # Converting to numpy
-    epidemic_sus = epidemic_zero.values
+    epidemic_npy = epidemic_zero.values
+    # Reshaping to 3d array
+    epidemic_npy = epidemic_npy.reshape(num_ervas, number_age_groups, len(select_columns))
+    epidemic_npy = epidemic_npy.astype(np.float64)
+    epidemic_sus = epidemic_npy.sum(axis=2)
+
     epidemic_sus = epidemic_sus.reshape(num_ervas, number_age_groups)
 
     # Rearranging the order of the matrix with correct order
