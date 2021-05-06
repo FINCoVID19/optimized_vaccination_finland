@@ -6,6 +6,9 @@ import pandas as pd
 from env_var import EPIDEMIC, EXPERIMENTS
 import logging
 from fetch_data import static_population_erva_age
+import os
+import time
+from multiprocessing import Pool
 
 
 def get_vac(u_con, c1, beta, c_gh, T, pop_hat, age_er):
@@ -330,18 +333,27 @@ def sol(u_con, c1, beta, c_gh, T, pop_hat, age_er):
                 R_g[g, n, j+1] = R_g[g, n, j] + T_hr*H_rg[g, n, j] + (1.-mu_w[g])*(1.-p_c[g])*T_hw*H_wg[g, n, j] + (1.-mu_q[g])*T_q0*Q_0g[g, n, j]
                 D_g[g, n, j+1] = D_g[g, n, j] + mu_q[g]*T_q0*Q_0g[g, n, j]+mu_w[g]*(1.-p_c[g])*T_hw*H_wg[g, n, j] + mu_c[g]*T_hc*H_cg[g, n, j]
 
-                d_hos = d_hos + T_q1*Q_1g[g, n, j]*age_er[n,g]
+                if death_optim:
+                    d_hos = d_hos + D_g[g, n, j+1]*age_er[n, g] # T_q1*Q_1g[g, n, j]*age_er[n,g]
+                else:
+                    d_hos = d_hos + T_q1*Q_1g[g, n, j]*age_er[n, g]
 
-        D_d[j] = d_hos
+        if death_optim:
+            D_d[j+1] = d_hos
+        else:
+            D_d[j] = d_hos
         V_d[j] = v_0
 
-    Df = 0.0
-    for h in range(N_g):
-        for k in range(N_p):
-            Df = Df + T_q1*Q_1g[h, k, N_t-1]*age_er[k, h]
-    D_d[N_t-1] = Df
-    # np.save("u0.npy", u)
-    return S_g, S_vg, S_xg, L_g, sum(D_d), V_d, u
+    if death_optim:
+        return S_g, S_vg, S_xg, L_g, D_d.max(), V_d, u
+    else:
+        Df = 0.0
+        for h in range(N_g):
+            for k in range(N_p):
+                Df = Df + T_q1*Q_1g[h, k, N_t-1]*age_er[k, h]
+        D_d[N_t-1] = Df
+        # np.save("u0.npy", u)
+        return S_g, S_vg, S_xg, L_g, sum(D_d), V_d, u
 
 
 def back_int(Sg, Sv, Sx, Lg, nu, c_hg, beta, T, age_er, mob, pop_erva, ind):
@@ -410,13 +422,20 @@ def back_int(Sg, Sv, Sx, Lg, nu, c_hg, beta, T, age_er, mob, pop_erva, ind):
                 lI[g, n, i-1] = lI[g, n, i] - T_I*lI[g, n, i] + sumh + sumh2 + sumh3 + lQ_0[g, n, i]*(1.-p_H[g+ind])*T_I \
                     + lQ_1[g, n, i]*p_H[g+ind]*T_I
                 lQ_0[g, n, i-1] = lQ_0[g, n, i]*(1. - T_q0) + lD[g, n, i]*mu_q[g+ind]*T_q0
-                lQ_1[g, n, i-1] = lQ_1[g, n, i]*(1. - T_q1) + lHw[g, n, i]*T_q1 + T_q1
+
+                if death_optim:
+                    lQ_1[g, n, i-1] = lQ_1[g, n, i]*(1. - T_q1) + lHw[g, n, i]*T_q1  #+ T_q1
+                else:
+                    lQ_1[g, n, i-1] = lQ_1[g, n, i]*(1. - T_q1) + lHw[g, n, i]*T_q1 + T_q1
+
                 lHw[g, n, i-1] = lHw[g, n, i]*(1.-T_hw) + lHc[g, n, i]*p_c[g+ind]*T_hw \
                     + lD[g, n, i]*mu_w[g+ind]*(1.-p_c[g+ind])*T_hw
                 lHc[g, n, i-1] = lHc[g, n, i]*(1.-T_hc) + lHr[g, n, i]*(1.-mu_c[g+ind])*T_hc \
                     + lD[g, n, i]*mu_c[g+ind]*T_hc
                 lHr[g, n, i-1] = lHr[g, n, i]*(1.-T_hr)
-                # lD[g,n,i-1] = lD[g,n,i]  +1.
+
+                if death_optim:
+                    lD[g, n, i-1] = lD[g, n, i] + 1.
 
                 # if lS[g,n,i]>lSv[g,n,i]:
                 dH[g, n, i] = -lS[g, n, i] + lSv[g, n, i]
@@ -490,10 +509,12 @@ def bound_f(bound_full, T_i, u_op, kg_pairs):
     return bound_rf, T_i, kg_pairs
 
 
-def main(beta_sim=0.03559801015581483, r=1.0):
+def optimize(filename, beta_sim=0.03559801015581483, r=1.0, death_optim_in=False):
     global beta
     beta = beta_sim
 
+    global death_optim
+    death_optim = death_optim_in
     r = r
 
     # contact matrix
@@ -721,8 +742,77 @@ def main(beta_sim=0.03559801015581483, r=1.0):
 
     current_time = now.strftime("%H:%M:%S")
     print("Current Time =", current_time)
-    np.save("1.5sol0_tau1.npy", nuf)
+    np.save(filename, nuf)
+    print('File written to: %s' % (filename, ))
+
+
+def run_optimize(r, beta_sim, tau, death_optim_in):
+    start_time = time.time()
+    proc_number = os.getpid()
+    print('Starting (%s). R: %s. Tau: %s. Death optim: %s' % (proc_number, r,
+                                                              tau, death_optim_in))
+
+    filename = "out/%ssol_tau%s.npy"
+    optimize(beta_sim=beta_sim, r=tau, filename=filename,
+             death_optim_in=death_optim_in)
+
+    elapsed_time = time.time() - start_time
+    elapsed_delta = datetime.timedelta(seconds=elapsed_time)
+    print('Finished (%s). R: %s. Tau: %s. Death optim: %s. Time: %s' % (proc_number,
+                                                                        r,
+                                                                        tau,
+                                                                        death_optim_in,
+                                                                        elapsed_delta))
+    return filename
+
+
+def run_parallel_optimizations():
+    all_experiments = [
+        (0.75,  0.,  0.016577192790495632, True),
+        (0.75,  0.5,  0.017420081058752156, True),
+        (0.75,  1.0,  0.017799005077907416, True),
+        (1.0,  0.,  0.022102923720660844, True),
+        (1.0,  0.5,  0.023226774745002877, True),
+        (1.0,  1.0,  0.023732006770543223, True),
+        (1.25,  0.,  0.027628654650826055, True),
+        (1.25,  0.5,  0.029033468431253595, True),
+        (1.25,  1.0,  0.02966500846317903, True),
+        (1.5,  0.,  0.033154385580991264, True),
+        (1.5,  0.5,  0.03484016211750431, True),
+        (1.5,  1.0,  0.03559801015581483, True),
+        (0.75,  0.,  0.016577192790495632, False),
+        (0.75,  0.5,  0.017420081058752156, False),
+        (0.75,  1.0,  0.017799005077907416, False),
+        (1.0,  0.,  0.022102923720660844, False),
+        (1.0,  0.5,  0.023226774745002877, False),
+        (1.0,  1.0,  0.023732006770543223, False),
+        (1.25,  0.,  0.027628654650826055, False),
+        (1.25,  0.5,  0.029033468431253595, False),
+        (1.25,  1.0,  0.02966500846317903, False),
+        (1.5,  0.,  0.033154385580991264, False),
+        (1.5,  0.5,  0.03484016211750431, False),
+        (1.5,  1.0,  0.03559801015581483, False),
+    ]
+    num_cpus = os.cpu_count()
+    start_time = time.time()
+    num_experiments = len(all_experiments)
+    result_filenames = []
+    print('Running %s experiments with %s CPUS.' % (num_experiments, num_cpus))
+    with Pool(processes=num_cpus) as pool:
+        # Calling the function to execute forward simulation in asynchronous way
+        async_res = [pool.apply_async(func=run_optimize,
+                                      args=(r, beta_sim, tau, death_optim_in))
+                     for r, tau, beta_simm death_optim_in in all_experiments]
+
+        # Waiting for the values of the async execution
+        for res in async_res:
+            filename = res.get()
+            result_filenames.append(filename)
+    elapsed_time = time.time() - start_time
+    elapsed_delta = datetime.timedelta(seconds=elapsed_time)
+    print('Finished experiments. Elapsed: %s' % (elapsed_delta, ))
+    print('Resulting filenames: %s' % (result_filenames, ))
 
 
 if __name__ == "__main__":
-    main()
+    run_parallel_optimizations()
