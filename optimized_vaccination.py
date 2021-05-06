@@ -802,7 +802,7 @@ def run_parallel_optimizations():
         # Calling the function to execute forward simulation in asynchronous way
         async_res = [pool.apply_async(func=run_optimize,
                                       args=(r, beta_sim, tau, death_optim_in))
-                     for r, tau, beta_simm death_optim_in in all_experiments]
+                     for r, tau, beta_sim, death_optim_in in all_experiments]
 
         # Waiting for the values of the async execution
         for res in async_res:
