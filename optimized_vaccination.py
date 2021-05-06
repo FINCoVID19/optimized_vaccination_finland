@@ -44,9 +44,11 @@ def get_vac(u_con, c1, beta, c_gh, T, pop_hat, age_er):
     t0 = EXPERIMENTS['t0']
 
     # Reading CSV
-    csv_name = 'out/epidemic_finland_%d.csv' % (num_age_groups, )
+    dir_path = os.path.dirname(os.path.realpath(__file__))
+    csv_name = 'epidemic_finland_%d.csv' % (num_age_groups, )
+    csv_path = os.path.join(dir_path, 'out', csv_name)
     # Reading CSV
-    epidemic_csv = pd.read_csv(csv_name)
+    epidemic_csv = pd.read_csv(csv_path)
     # Getting only date t0
     epidemic_zero = epidemic_csv.loc[epidemic_csv['date'] == t0, :]
     # Removing Ahvenanmaa or Aland
@@ -752,8 +754,10 @@ def run_optimize(r, beta_sim, tau, death_optim_in):
     print('Starting (%s). R: %s. Tau: %s. Death optim: %s' % (proc_number, r,
                                                               tau, death_optim_in))
 
-    filename = "out/%ssol_tau%s.npy"
-    optimize(beta_sim=beta_sim, r=tau, filename=filename,
+    dir_path = os.path.dirname(os.path.realpath(__file__))
+    filename = "%ssol_tau%s_deathoptim%s.npy" % (r, tau, death_optim_in)
+    file_path = os.path.join(dir_path, 'out', filename)
+    optimize(beta_sim=beta_sim, r=tau, filename=file_path,
              death_optim_in=death_optim_in)
 
     elapsed_time = time.time() - start_time
