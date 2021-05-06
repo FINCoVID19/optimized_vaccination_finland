@@ -109,7 +109,7 @@ def get_vac(u_con, c1, beta, c_gh, T, pop_hat, age_er):
     S_vg = np.zeros((N_g, N_p, N_t))
 
     # force of infection in equation (4)
-    def force_of_inf(I_h, c_gh, k,N_g,N_p,mob,pop_hat):
+    def force_of_inf(I_h, c_gh, k, N_g, N_p, mob, pop_hat):
         fi = 0.0
         for h in range(N_g):
             for m in range(N_p):
@@ -490,232 +490,239 @@ def bound_f(bound_full, T_i, u_op, kg_pairs):
     return bound_rf, T_i, kg_pairs
 
 
-beta = 0.03559801015581483
-# tau parameter
-r = 1.0
+def main(beta_sim=0.03559801015581483, r=1.0):
+    global beta
+    beta = beta_sim
 
-# contact matrix
-num_ervas = EXPERIMENTS['num_ervas']
-number_age_groups = EXPERIMENTS['num_age_groups']
+    r = r
 
-c_gh_3 = EPIDEMIC['contact_matrix'][number_age_groups]
+    # contact matrix
+    num_ervas = EXPERIMENTS['num_ervas']
+    number_age_groups = EXPERIMENTS['num_age_groups']
 
-logger = logging.getLogger()
-erva_pop_file = 'stats/erva_population_age_2020.csv'
-pop_ervas_age, _ = static_population_erva_age(logger, erva_pop_file,
-                                              number_age_groups=number_age_groups)
-pop_ervas_age = pop_ervas_age[~pop_ervas_age['erva'].str.contains('All')]
-pop_ervas_age = pop_ervas_age[~pop_ervas_age['erva'].str.contains('land')]
-pop_ervas_age = pop_ervas_age.sort_values(['erva', 'age_group'])
-pop_ervas_npy = pop_ervas_age['Total'].values
-pop_ervas_npy = pop_ervas_npy.reshape(num_ervas, number_age_groups)
+    c_gh_3 = EPIDEMIC['contact_matrix'][number_age_groups]
 
-ervas_order = EPIDEMIC['ervas_order']
+    logger = logging.getLogger()
+    erva_pop_file = 'stats/erva_population_age_2020.csv'
+    pop_ervas_age, _ = static_population_erva_age(logger, erva_pop_file,
+                                                  number_age_groups=number_age_groups)
+    pop_ervas_age = pop_ervas_age[~pop_ervas_age['erva'].str.contains('All')]
+    pop_ervas_age = pop_ervas_age[~pop_ervas_age['erva'].str.contains('land')]
+    pop_ervas_age = pop_ervas_age.sort_values(['erva', 'age_group'])
+    pop_ervas_npy = pop_ervas_age['Total'].values
+    pop_ervas_npy = pop_ervas_npy.reshape(num_ervas, number_age_groups)
 
-ervas_df = list(pd.unique(pop_ervas_age['erva']))
-ervas_pd_order = [ervas_df.index(erva) for erva in ervas_order]
-# age structure in each erva
-age_er = pop_ervas_npy[ervas_pd_order, :]
+    ervas_order = EPIDEMIC['ervas_order']
 
-pop_erva = age_er.sum(axis=1)
+    ervas_df = list(pd.unique(pop_ervas_age['erva']))
+    ervas_pd_order = [ervas_df.index(erva) for erva in ervas_order]
+    # age structure in each erva
+    global age_er
+    age_er = pop_ervas_npy[ervas_pd_order, :]
 
-# mobility matrix
-m_av = EPIDEMIC['mobility_matrix'][num_ervas]
+    global pop_erva
+    pop_erva = age_er.sum(axis=1)
 
-m_av = m_av/pop_erva[:, np.newaxis]
+    # mobility matrix
+    m_av = EPIDEMIC['mobility_matrix'][num_ervas]
 
-N_p = num_ervas
-Ng = number_age_groups
-mob_av = np.zeros((N_p, N_p))
+    m_av = m_av/pop_erva[:, np.newaxis]
 
-print('tau= ', r)
-for k in range(N_p):
-    for m in range(N_p):
-        if k == m:
-            mob_av[k, m] = (1.-r) + r*m_av[k, m]
-        else:
-            mob_av[k, m] = r*m_av[k, m]
+    N_p = num_ervas
+    Ng = number_age_groups
 
+    global mob_av
+    mob_av = np.zeros((N_p, N_p))
 
-####################################################################
-# equation (3) in overleaf (change in population size because of mobility) N_hat_{lg}, N_hat_{l}
-pop_erva_hat = np.zeros(N_p)
-age_er_hat = np.zeros((Ng,N_p))
-
-
-for m in range(N_p):
-    m_k = 0.0
+    print('tau = %s' % (r, ))
     for k in range(N_p):
-        m_k = m_k + pop_erva[k]*mob_av[k, m]
-        for g in range(Ng):
-            age_er_hat[g, m] = sum(age_er[:, g]*mob_av[:, m])
+        for m in range(N_p):
+            if k == m:
+                mob_av[k, m] = (1.-r) + r*m_av[k, m]
+            else:
+                mob_av[k, m] = r*m_av[k, m]
 
-    pop_erva_hat[m] = m_k
+    ####################################################################
+    # equation (3) in overleaf (change in population size because of mobility) N_hat_{lg}, N_hat_{l}
+    global pop_erva_hat
+    pop_erva_hat = np.zeros(N_p)
+    age_er_hat = np.zeros((Ng, N_p))
 
-age_pop = sum(age_er)
-beta_gh = np.zeros((Ng, Ng))
+    for m in range(N_p):
+        m_k = 0.0
+        for k in range(N_p):
+            m_k = m_k + pop_erva[k]*mob_av[k, m]
+            for g in range(Ng):
+                age_er_hat[g, m] = sum(age_er[:, g]*mob_av[:, m])
 
-for g in range(Ng):
-    for h in range(Ng):
-        if g == h:
-            for m in range(N_p):
-                sum_kg2 = 0.0
-                for k in range(N_p):
-                    sum_kg2 = sum_kg2 + age_er[k, g]*mob_av[k, m]*mob_av[k, m]/pop_erva_hat[m]
-            sum_kg = sum(age_er_hat[g, :]*age_er_hat[h, :]/pop_erva_hat)
-            beta_gh[g, h] = age_pop[g]*c_gh_3[g, h]/(sum_kg-sum_kg2)
-        else:
-            sum_kg = age_er_hat[g, :]*age_er_hat[h, :]
-            beta_gh[g, h] = age_pop[g]*c_gh_3[g, h]/(sum(sum_kg/pop_erva_hat))
+        pop_erva_hat[m] = m_k
 
-######################################################################################
-N_p = num_ervas
-Ng = number_age_groups
-# number of optimization variables
-N_f = (Ng-4)*N_p
-T = 110
+    age_pop = sum(age_er)
+    global beta_gh
+    beta_gh = np.zeros((Ng, Ng))
 
+    for g in range(Ng):
+        for h in range(Ng):
+            if g == h:
+                for m in range(N_p):
+                    sum_kg2 = 0.0
+                    for k in range(N_p):
+                        sum_kg2 = sum_kg2 + age_er[k, g]*mob_av[k, m]*mob_av[k, m]/pop_erva_hat[m]
+                sum_kg = sum(age_er_hat[g, :]*age_er_hat[h, :]/pop_erva_hat)
+                beta_gh[g, h] = age_pop[g]*c_gh_3[g, h]/(sum_kg-sum_kg2)
+            else:
+                sum_kg = age_er_hat[g, :]*age_er_hat[h, :]
+                beta_gh[g, h] = age_pop[g]*c_gh_3[g, h]/(sum(sum_kg/pop_erva_hat))
 
-# transmission parameter
-u = np.zeros((Ng, N_p, T))
-time = np.arange(0, T)
-n_max = 30000
+    ######################################################################################
+    N_p = num_ervas
+    Ng = number_age_groups
+    # number of optimization variables
+    N_f = (Ng-4)*N_p
+    global T
+    T = 110
 
+    # transmission parameter
+    global u
+    u = np.zeros((Ng, N_p, T))
+    time = np.arange(0, T)
+    n_max = 30000
 
-# constraints
-a1 = np.eye(T)*age_er[0, 2]
-a2 = np.eye(T)*age_er[1, 2]
-a3 = np.eye(T)*age_er[2, 2]
-a4 = np.eye(T)*age_er[3, 2]
-a5 = np.eye(T)*age_er[4, 2]
+    # constraints
+    a1 = np.eye(T)*age_er[0, 2]
+    a2 = np.eye(T)*age_er[1, 2]
+    a3 = np.eye(T)*age_er[2, 2]
+    a4 = np.eye(T)*age_er[3, 2]
+    a5 = np.eye(T)*age_er[4, 2]
 
-b1 = np.eye(T)*age_er[0, 3]
-b2 = np.eye(T)*age_er[1, 3]
-b3 = np.eye(T)*age_er[2, 3]
-b4 = np.eye(T)*age_er[3, 3]
-b5 = np.eye(T)*age_er[4, 3]
+    b1 = np.eye(T)*age_er[0, 3]
+    b2 = np.eye(T)*age_er[1, 3]
+    b3 = np.eye(T)*age_er[2, 3]
+    b4 = np.eye(T)*age_er[3, 3]
+    b5 = np.eye(T)*age_er[4, 3]
 
-c0 = np.eye(T)*age_er[0, 4]
-c01 = np.eye(T)*age_er[1, 4]
-c02 = np.eye(T)*age_er[2, 4]
-c03 = np.eye(T)*age_er[3, 4]
-c04 = np.eye(T)*age_er[4, 4]
+    c0 = np.eye(T)*age_er[0, 4]
+    c01 = np.eye(T)*age_er[1, 4]
+    c02 = np.eye(T)*age_er[2, 4]
+    c03 = np.eye(T)*age_er[3, 4]
+    c04 = np.eye(T)*age_er[4, 4]
 
-c1 = np.eye(T)*age_er[0, 5]
-c2 = np.eye(T)*age_er[1, 5]
-c3 = np.eye(T)*age_er[2, 5]
-c4 = np.eye(T)*age_er[3, 5]
-c5 = np.eye(T)*age_er[4, 5]
+    c1 = np.eye(T)*age_er[0, 5]
+    c2 = np.eye(T)*age_er[1, 5]
+    c3 = np.eye(T)*age_er[2, 5]
+    c4 = np.eye(T)*age_er[3, 5]
+    c5 = np.eye(T)*age_er[4, 5]
 
-c6 = np.eye(T)*age_er[0, 6]
-c7 = np.eye(T)*age_er[1, 6]
-c8 = np.eye(T)*age_er[2, 6]
-c9 = np.eye(T)*age_er[3, 6]
-c10 = np.eye(T)*age_er[4, 6]
+    c6 = np.eye(T)*age_er[0, 6]
+    c7 = np.eye(T)*age_er[1, 6]
+    c8 = np.eye(T)*age_er[2, 6]
+    c9 = np.eye(T)*age_er[3, 6]
+    c10 = np.eye(T)*age_er[4, 6]
 
-Af = np.concatenate((a1, a2, a3, a4, a5,
-                     b1, b2, b3, b4, b5,
-                     c0, c01, c02, c03, c04,
-                     c1, c2, c3, c4, c5, c6, c7, c8, c9, c10), axis=1)
+    Af = np.concatenate((a1, a2, a3, a4, a5,
+                         b1, b2, b3, b4, b5,
+                         c0, c01, c02, c03, c04,
+                         c1, c2, c3, c4, c5, c6, c7, c8, c9, c10), axis=1)
 
-print(np.shape(Af))
-print(T*N_f)
+    print(np.shape(Af))
+    print(T*N_f)
 
-b = n_max*np.ones(T)
-print('first')
+    b = n_max*np.ones(T)
+    print('first')
 
-cons = {
-        "type": "eq", "fun": lambda x:  Af @ x - b,
-        'jac': lambda x: Af
-}
+    cons = {
+            "type": "eq", "fun": lambda x:  Af @ x - b,
+            'jac': lambda x: Af
+    }
 
-# bounds for minimum and maximum value for the optimization variable
-bound0 = np.zeros(T*N_f)
+    # bounds for minimum and maximum value for the optimization variable
+    bound0 = np.zeros(T*N_f)
 
+    now = datetime.now()
+    current_time = now.strftime("%H:%M:%S")
+    print("Current Time =", current_time)
 
-now = datetime.now()
-current_time = now.strftime("%H:%M:%S")
-print("Current Time =", current_time)
+    x0 = np.zeros(N_f*T)
+    bound0 = np.zeros(N_f*T)
 
-x0 = np.zeros(N_f*T)
-bound0 = np.zeros(N_f*T)
+    bound1 = np.zeros(T*N_f)
+    ########check this again
+    bound1[0:T] = n_max/age_er[0, 2]
+    bound1[T:2*T] = n_max/age_er[1, 2]
+    bound1[2*T:3*T] = n_max/age_er[2, 2]
+    bound1[3*T:4*T] = n_max/age_er[3, 2]
+    bound1[4*T:5*T] = n_max/age_er[4, 2]
 
-bound1 = np.zeros(T*N_f)
-########check this again
-bound1[0:T] = n_max/age_er[0, 2]
-bound1[T:2*T] = n_max/age_er[1, 2]
-bound1[2*T:3*T] = n_max/age_er[2, 2]
-bound1[3*T:4*T] = n_max/age_er[3, 2]
-bound1[4*T:5*T] = n_max/age_er[4, 2]
+    bound1[5*T:6*T] = n_max/age_er[0, 3]
+    bound1[6*T:7*T] = n_max/age_er[1, 3]
+    bound1[7*T:8*T] = n_max/age_er[2, 3]
+    bound1[8*T:9*T] = n_max/age_er[3, 3]
+    bound1[9*T:10*T] = n_max/age_er[4, 3]
 
-bound1[5*T:6*T] = n_max/age_er[0, 3]
-bound1[6*T:7*T] = n_max/age_er[1, 3]
-bound1[7*T:8*T] = n_max/age_er[2, 3]
-bound1[8*T:9*T] = n_max/age_er[3, 3]
-bound1[9*T:10*T] = n_max/age_er[4, 3]
+    bound1[10*T:11*T] = n_max/age_er[0, 4]
+    bound1[11*T:12*T] = n_max/age_er[1, 4]
+    bound1[12*T:13*T] = n_max/age_er[2, 4]
+    bound1[13*T:14*T] = n_max/age_er[3, 4]
+    bound1[14*T:15*T] = n_max/age_er[4, 4]
 
-bound1[10*T:11*T] = n_max/age_er[0, 4]
-bound1[11*T:12*T] = n_max/age_er[1, 4]
-bound1[12*T:13*T] = n_max/age_er[2, 4]
-bound1[13*T:14*T] = n_max/age_er[3, 4]
-bound1[14*T:15*T] = n_max/age_er[4, 4]
+    bound1[15*T:16*T] = n_max/age_er[0, 5]
+    bound1[16*T:17*T] = n_max/age_er[1, 5]
+    bound1[17*T:18*T] = n_max/age_er[2, 5]
+    bound1[18*T:19*T] = n_max/age_er[3, 5]
+    bound1[19*T:20*T] = n_max/age_er[4, 5]
 
-bound1[15*T:16*T] = n_max/age_er[0, 5]
-bound1[16*T:17*T] = n_max/age_er[1, 5]
-bound1[17*T:18*T] = n_max/age_er[2, 5]
-bound1[18*T:19*T] = n_max/age_er[3, 5]
-bound1[19*T:20*T] = n_max/age_er[4, 5]
+    bound1[20*T:21*T] = n_max/age_er[0, 6]
+    bound1[21*T:22*T] = n_max/age_er[1, 6]
+    bound1[22*T:23*T] = n_max/age_er[2, 6]
+    bound1[23*T:24*T] = n_max/age_er[3, 6]
+    bound1[24*T:25*T] = n_max/age_er[4, 6]
 
-bound1[20*T:21*T] = n_max/age_er[0, 6]
-bound1[21*T:22*T] = n_max/age_er[1, 6]
-bound1[22*T:23*T] = n_max/age_er[2, 6]
-bound1[23*T:24*T] = n_max/age_er[3, 6]
-bound1[24*T:25*T] = n_max/age_er[4, 6]
-
-bounds = Bounds(bound0, bound1)
-
-res = minimize(ob_fun, x0, method='SLSQP', jac=der,
-               constraints=[cons], options={'maxiter': 5, 'disp': True},
-               bounds=bounds)
-
-
-now = datetime.now()
-current_time = now.strftime("%H:%M:%S")
-print("Current Time =", current_time)
-
-opc_o = np.reshape(res.x, (5, N_p, T))
-nu2_o = np.zeros((2, N_p, T))
-nu3_o = np.zeros((2, N_p, T))
-nuf_o = np.concatenate((nu2_o, opc_o, nu3_o))
-u_old = nuf_o
-
-T_old = 0
-bound_old = bound1
-
-old_kg_pairs = []
-for i in range(24):
-    bound_new, T_new, new_kg_pairs = bound_f(bound_old, T_old, u_old, old_kg_pairs)
-    bound_old = bound_new
-    T_old = T_new
-    old_kg_pairs = new_kg_pairs
-    if len(new_kg_pairs) >= 24:
-        nuf = u_old
-        break
-    bounds = Bounds(bound0, bound_new)
+    bounds = Bounds(bound0, bound1)
 
     res = minimize(ob_fun, x0, method='SLSQP', jac=der,
-                   constraints=[cons], options={'maxiter': 3, 'disp': True},
+                   constraints=[cons], options={'maxiter': 5, 'disp': True},
                    bounds=bounds)
 
-    opc = np.reshape(res.x, (5, N_p, T))
-    nu2 = np.zeros((2, N_p, T))
-    nu3 = np.zeros((2, N_p, T))
-    nuf = np.concatenate((nu2, opc, nu3))
-    u_old = nuf
+    now = datetime.now()
+    current_time = now.strftime("%H:%M:%S")
+    print("Current Time =", current_time)
+
+    opc_o = np.reshape(res.x, (5, N_p, T))
+    nu2_o = np.zeros((2, N_p, T))
+    nu3_o = np.zeros((2, N_p, T))
+    nuf_o = np.concatenate((nu2_o, opc_o, nu3_o))
+    u_old = nuf_o
+
+    T_old = 0
+    bound_old = bound1
+
+    old_kg_pairs = []
+    for i in range(24):
+        bound_new, T_new, new_kg_pairs = bound_f(bound_old, T_old, u_old, old_kg_pairs)
+        bound_old = bound_new
+        T_old = T_new
+        old_kg_pairs = new_kg_pairs
+        if len(new_kg_pairs) >= 24:
+            nuf = u_old
+            break
+        bounds = Bounds(bound0, bound_new)
+
+        res = minimize(ob_fun, x0, method='SLSQP', jac=der,
+                       constraints=[cons], options={'maxiter': 3, 'disp': True},
+                       bounds=bounds)
+
+        opc = np.reshape(res.x, (5, N_p, T))
+        nu2 = np.zeros((2, N_p, T))
+        nu3 = np.zeros((2, N_p, T))
+        nuf = np.concatenate((nu2, opc, nu3))
+        u_old = nuf
+
+    now = datetime.now()
+
+    current_time = now.strftime("%H:%M:%S")
+    print("Current Time =", current_time)
+    np.save("1.5sol0_tau1.npy", nuf)
 
 
-now = datetime.now()
-
-current_time = now.strftime("%H:%M:%S")
-print("Current Time =", current_time)
-np.save("1.5sol0_tau1.npy", nuf)
+if __name__ == "__main__":
+    main()
