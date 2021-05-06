@@ -526,7 +526,9 @@ def optimize(filename, beta_sim=0.03559801015581483, r=1.0, death_optim_in=False
     c_gh_3 = EPIDEMIC['contact_matrix'][number_age_groups]
 
     logger = logging.getLogger()
-    erva_pop_file = 'stats/erva_population_age_2020.csv'
+    dir_path = os.path.dirname(os.path.realpath(__file__))
+    csv_name = 'erva_population_age_2020.csv'
+    erva_pop_file = os.path.join(dir_path, 'stats', csv_name)
     pop_ervas_age, _ = static_population_erva_age(logger, erva_pop_file,
                                                   number_age_groups=number_age_groups)
     pop_ervas_age = pop_ervas_age[~pop_ervas_age['erva'].str.contains('All')]
