@@ -8,11 +8,6 @@ import logging
 from fetch_data import static_population_erva_age
 
 
-beta = 0.03559801015581483
-# tau parameter
-r = 1.0
-
-
 def get_vac(u_con, c1, beta, c_gh, T, pop_hat, age_er):
     num_ervas, num_age_groups = age_er.shape
     # Time periods for epidemic
@@ -277,7 +272,7 @@ def sol(u_con, c1, beta, c_gh, T, pop_hat, age_er):
     S_xg = np.zeros((N_g, N_p, N_t))
     s0, svg0, sxg0, vg0, eg0, ig0, q0, q1, hw0, hc0, hr0, rg0, dg0, D1 = get_vac(30000., c1, beta, c_gh, T, pop_hat, age_er)
 
-    S_g[:, :, 0] =s0
+    S_g[:, :, 0] = s0
     S_vg[:, :, 0] = svg0
     S_xg[:, :, 0] = sxg0
 
@@ -351,8 +346,6 @@ def sol(u_con, c1, beta, c_gh, T, pop_hat, age_er):
 
 def back_int(Sg, Sv, Sx, Lg, nu, c_hg, beta, T, age_er, mob, pop_erva, ind):
     num_ervas, num_age_groups = age_er.shape
-    N_g = num_age_groups
-    N_p = num_ervas
 
     T_E = EPIDEMIC['T_E']
     T_V = EPIDEMIC['T_V']
@@ -375,6 +368,9 @@ def back_int(Sg, Sv, Sx, Lg, nu, c_hg, beta, T, age_er, mob, pop_erva, ind):
     p_c = EPIDEMIC['p_c'][num_age_groups]
     alpha = EPIDEMIC['alpha']
     e = EPIDEMIC['e']
+
+    N_g = 5
+    N_p = num_ervas
     N_t = T
 
     # plt.plot(time,I_all)
@@ -430,10 +426,79 @@ def back_int(Sg, Sv, Sx, Lg, nu, c_hg, beta, T, age_er, mob, pop_erva, ind):
     return dH
 
 
+def ob_fun(x):
+    Ng = 5
+    N_p = 5
+    Nt = 110
+    nuc = np.reshape(x, (Ng, N_p, Nt))
+    nu2 = np.zeros((2, N_p, Nt))
+    nu3 = np.zeros((2, N_p, Nt))
+    nuf = np.concatenate((nu2, nuc, nu3))
+    Sg, Svg, Sxg, Lg, Dg, Vd, vac = sol(nuf, mob_av, beta, beta_gh, T, pop_erva_hat, age_er)
+
+    l = (Dg)
+    print(l)
+
+    J = l
+    return J
+
+
+def der(x):
+    Ng = 5
+    N_p = 5
+    Nt = 110
+
+    nuc = np.reshape(x, (Ng, N_p, Nt))
+    nu2 = np.zeros((2, N_p, Nt))
+    nu3 = np.zeros((2, N_p, Nt))
+    nuf = np.concatenate((nu2, nuc, nu3))
+    Sg, Svg, Sxg, Lg, Dg, Vd, vac = sol(nuf, mob_av, beta, beta_gh, T, pop_erva_hat, age_er)
+    # calculation of the gradient
+    dH = back_int(Sg, Svg, Sxg, Lg, u, beta_gh, beta, T, age_er, mob_av, pop_erva_hat, 2)
+
+    dH2 = np.reshape(dH, (Ng*N_p*Nt))
+
+    return dH2
+
+
+def bound_f(bound_full, T_i, u_op, kg_pairs):
+    Ng = 5
+    N_p = 5
+    T = 110
+    T_old = T_i
+    T_temp = T_i
+    bound_r = np.reshape(bound_full, (Ng, N_p, T))
+    Sg, Svg, Sxg, Lg, Dg, Vd, vac = sol(u_op, mob_av, beta, beta_gh, T, pop_erva_hat, age_er)
+    Var = False
+    for i in range(T_i+1, T):
+        for g in range(Ng-1, -1, -1):
+            for k in range(N_p):
+                if Sg[g+2, k, i] == 0:
+                    if (g, k) not in kg_pairs:
+                        T_i = i
+                        print(T_i, g, k)
+                        bound_r[g, k, i-1] = Sg[g+2, k, i-1] - Lg[g+2, k, i-1]*Sg[g+2, k, i-1]
+                        bound_r[g, k, i:T] = 0.0
+                        T_temp = i
+                        kg_pairs.append((g, k))
+                        Var = True
+        if Var:
+            break
+
+    bound_rf = np.reshape(bound_r, Ng*N_p*T)
+
+    return bound_rf, T_i, kg_pairs
+
+
+beta = 0.03559801015581483
+# tau parameter
+r = 1.0
+
 # contact matrix
-c_gh_3 = EPIDEMIC['contact_matrix']
 num_ervas = EXPERIMENTS['num_ervas']
 number_age_groups = EXPERIMENTS['num_age_groups']
+
+c_gh_3 = EPIDEMIC['contact_matrix'][number_age_groups]
 
 logger = logging.getLogger()
 erva_pop_file = 'stats/erva_population_age_2020.csv'
@@ -455,7 +520,7 @@ age_er = pop_ervas_npy[ervas_pd_order, :]
 pop_erva = age_er.sum(axis=1)
 
 # mobility matrix
-m_av = EPIDEMIC['mobility_matrix']
+m_av = EPIDEMIC['mobility_matrix'][num_ervas]
 
 m_av = m_av/pop_erva[:, np.newaxis]
 
@@ -473,7 +538,7 @@ for k in range(N_p):
 
 
 ####################################################################
-#equation (3) in overleaf (change in population size because of mobility) N_hat_{lg}, N_hat_{l}
+# equation (3) in overleaf (change in population size because of mobility) N_hat_{lg}, N_hat_{l}
 pop_erva_hat = np.zeros(N_p)
 age_er_hat = np.zeros((Ng,N_p))
 
@@ -515,40 +580,6 @@ T = 110
 u = np.zeros((Ng, N_p, T))
 time = np.arange(0, T)
 n_max = 30000
-
-
-def ob_fun(x):
-    Ng = 5
-    N_p = 5
-    Nt = 110
-    nuc = np.reshape(x, (Ng, N_p, Nt))
-    nu2 = np.zeros((2, N_p, Nt))
-    nu3 = np.zeros((2, N_p, Nt))
-    nuf = np.concatenate((nu2, nuc, nu3))
-    Sg, Svg, Sxg, Lg, Dg, Vd, vac = sol(nuf, mob_av, beta, beta_gh, T, pop_erva_hat, age_er)
-
-    l = (Dg)
-    print(l)
-
-    J = l
-    return J
-
-
-def der(x):
-    Ng = 5
-    N_p = 5
-    Nt = 110
-
-    nuc = np.reshape(x, (Ng, N_p, Nt))
-    nu2 = np.zeros((2, N_p, Nt))
-    nu3 = np.zeros((2, N_p, Nt))
-    nuf = np.concatenate((nu2,nuc,nu3))
-    Sg, Svg, Sxg, Lg, Dg, Vd, vac = sol(nuf, mob_av,beta,beta_gh,T,pop_erva_hat,age_er)   
-    dH = back_int(Sg, Svg, Sxg, Lg,u,beta_gh,beta,T,age_er,mob_av,pop_erva_hat,2)  #  calculation of the gradient
-
-    dH2 = np.reshape(dH,(Ng*N_p*Nt))
-
-    return dH2
 
 
 # constraints
@@ -600,35 +631,6 @@ cons = {
 
 # bounds for minimum and maximum value for the optimization variable
 bound0 = np.zeros(T*N_f)
-
-
-def bound_f(bound_full, T_i, u_op, kg_pairs):
-    Ng = 5
-    N_p = 5
-    T = 110
-    T_old = T_i
-    T_temp = T_i
-    bound_r = np.reshape(bound_full, (Ng, N_p, T))
-    Sg, Svg, Sxg, Lg, Dg, Vd, vac = sol(u_op, mob_av,beta,beta_gh,T,pop_erva_hat,age_er)
-    Var = False
-    for i in range(T_i+1, T):
-        for g in range(Ng-1, -1, -1):
-            for k in range(N_p):
-                if Sg[g+2, k, i] == 0:
-                    if (g, k) not in kg_pairs:
-                        T_i = i
-                        print(T_i, g, k)
-                        bound_r[g, k, i-1] = Sg[g+2, k, i-1] - Lg[g+2, k, i-1]*Sg[g+2, k, i-1]
-                        bound_r[g, k, i:T] = 0.0
-                        T_temp = i
-                        kg_pairs.append((g, k))
-                        Var = True
-        if Var:
-            break
-
-    bound_rf = np.reshape(bound_r, Ng*N_p*T)
-
-    return bound_rf, T_i, kg_pairs
 
 
 now = datetime.now()
