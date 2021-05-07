@@ -752,25 +752,38 @@ def optimize(filename, beta_sim=0.03559801015581483, r=1.0, death_optim_in=False
 
 
 def run_optimize(r, beta_sim, tau, death_optim_in):
-    start_time = time.time()
-    proc_number = os.getpid()
-    print('Starting (%s). R: %s. Tau: %s. Death optim: %s' % (proc_number, r,
-                                                              tau, death_optim_in))
-
-    dir_path = os.path.dirname(os.path.realpath(__file__))
     filename = "%ssol_tau%s_deathoptim%s.npy" % (r, tau, death_optim_in)
-    file_path = os.path.join(dir_path, 'out', filename)
-    optimize(beta_sim=beta_sim, r=tau, filename=file_path,
-             death_optim_in=death_optim_in)
+    try:
+        start_time = time.time()
+        proc_number = os.getpid()
+        print('Starting (%s). R: %s. Tau: %s. Death optim: %s' % (proc_number, r,
+                                                                  tau, death_optim_in))
 
-    elapsed_time = time.time() - start_time
-    elapsed_delta = dt.timedelta(seconds=elapsed_time)
-    print('Finished (%s). R: %s. Tau: %s. Death optim: %s. Time: %s' % (proc_number,
-                                                                        r,
-                                                                        tau,
-                                                                        death_optim_in,
-                                                                        elapsed_delta))
-    return filename
+        dir_path = os.path.dirname(os.path.realpath(__file__))
+        file_path = os.path.join(dir_path, 'out', filename)
+        optimize(beta_sim=beta_sim, r=tau, filename=file_path,
+                 death_optim_in=death_optim_in)
+
+        elapsed_time = time.time() - start_time
+        elapsed_delta = dt.timedelta(seconds=elapsed_time)
+        print('Finished (%s). R: %s. Tau: %s. Death optim: %s. Time: %s' % (proc_number,
+                                                                            r,
+                                                                            tau,
+                                                                            death_optim_in,
+                                                                            elapsed_delta))
+        return filename
+    except Exception:
+        logger = logging.getLogger()
+        numeric_log_level = getattr(logging, "DEBUG", None)
+        logging.basicConfig(
+            format='%(asctime)s %(levelname)s: %(message)s',
+            datefmt='%d/%m/%Y %H:%M:%S %p',
+            level=numeric_log_level,
+            handlers=[logging.StreamHandler()]
+        )
+        logger.exception("Something went wrong in optimization: %s" % (filename, ))
+        print("Something went wrong in optimization: %s" % (filename, ))
+        return None
 
 
 def run_parallel_optimizations():
