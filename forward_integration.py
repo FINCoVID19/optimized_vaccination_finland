@@ -13,9 +13,9 @@ def forward_integration(u_con, c1, beta, c_gh, T, pop_hat, age_er,
                         u_op_file=None):
     # number of age groups and ervas
     num_ervas, num_age_groups = age_er.shape
-    N_t = T
     N_p = num_ervas
     N_g = num_age_groups
+    N_t = T
 
     # Time periods for epidemic
     T_E = EPIDEMIC['T_E']
@@ -38,6 +38,18 @@ def forward_integration(u_con, c1, beta, c_gh, T, pop_hat, age_er,
     # Fraction of hospitalized needing critical care
     p_c = EPIDEMIC['p_c'][num_age_groups]
     alpha = EPIDEMIC['alpha']
+
+    pop_erva = age_er.sum(axis=1)
+    # Initializing all group indicators in the last group
+    age_group_indicators = np.array([N_g-1]*N_p)
+    delay_check_vacc = EPIDEMIC['delay_check_vacc']
+
+    # Initialize vaccination rate
+    if u_op_file is None:
+        u = np.zeros((N_g, N_p, N_t))
+        assert np.isclose(np.sum(ws_vacc), 0) or np.isclose(np.sum(ws_vacc), 1)
+    else:
+        u = np.load(u_op_file)
 
     # Allocating space for compartments
     S_g = np.zeros((N_g, N_p, N_t))
@@ -69,18 +81,6 @@ def forward_integration(u_con, c1, beta, c_gh, T, pop_hat, age_er,
 
     # I store the values for the force of infection (needed for the adjoint equations)
     L_g = np.zeros((N_g, N_p, N_t))
-
-    pop_erva = age_er.sum(axis=1)
-    # Initializing all group indicators in the last group
-    age_group_indicators = np.array([N_g-1]*N_p)
-    delay_check_vacc = EPIDEMIC['delay_check_vacc']
-
-    # Initialize vaccination rate
-    if u_op_file is None:
-        u = np.zeros((N_g, N_p, N_t))
-        assert np.isclose(np.sum(ws_vacc), 0) or np.isclose(np.sum(ws_vacc), 1)
-    else:
-        u = np.load(u_op_file)
 
     # Function to calculate the force of infection
     def force_of_inf(I_h, c_gh, k, N_g, N_p, mob, pop_hat):

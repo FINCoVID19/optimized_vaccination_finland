@@ -59,16 +59,21 @@ def get_experiments_results(num_age_groups, num_ervas, e, taus,
             beta = r/tau_params[tau]['rho']
             for ws, label in strategies:
                 # ws is None mean go to optimized strategy
-                if ws is None:
-                    u_op_file = 'out/R_%s_op_sol.npy' % (r, )
-                    if os.path.isfile(u_op_file):
+                if type(ws) is not list:
+                    dir_path = os.path.dirname(os.path.realpath(__file__))
+                    u_op_file = "%ssol_tau%s_deathoptim%s.npy" % (r, tau, ws)
+                    u_op_file_path = os.path.join(dir_path, 'out', u_op_file)
+                    if os.path.isfile(u_op_file_path):
                         exec_experiment = True
                     else:
-                        u_op_file = None
+                        u_op_file_path = None
                         exec_experiment = False
+                    # Forcing T to be 110 to match optimized files
+                    T_forward = 110
                 else:
                     exec_experiment = True
-                    u_op_file = None
+                    u_op_file_path = None
+                    T_forward = T
 
                 if exec_experiment:
                     num_experiments += 1
@@ -77,7 +82,7 @@ def get_experiments_results(num_age_groups, num_ervas, e, taus,
                         'c1': tau_params[tau]['mob_av'],
                         'beta': beta,
                         'c_gh': tau_params[tau]['beta_gh'],
-                        'T': T,
+                        'T': T_forward,
                         'pop_hat': tau_params[tau]['pop_erva_hat'],
                         'age_er': age_er,
                         't0': t0,
@@ -85,7 +90,7 @@ def get_experiments_results(num_age_groups, num_ervas, e, taus,
                         'e': e,
                         'init_vacc': init_vacc,
                         'epidemic_npy': epidemic_npy,
-                        'u_op_file': u_op_file,
+                        'u_op_file': u_op_file_path,
                         'num_exp': num_experiments,
                         'r': r,
                         'tau': tau,
