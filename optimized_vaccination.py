@@ -9,6 +9,7 @@ from fetch_data import static_population_erva_age
 import os
 import time
 from multiprocessing import Pool
+import datetime as dt
 
 
 def get_vac(u_con, c1, beta, c_gh, T, pop_hat, age_er):
@@ -763,7 +764,7 @@ def run_optimize(r, beta_sim, tau, death_optim_in):
              death_optim_in=death_optim_in)
 
     elapsed_time = time.time() - start_time
-    elapsed_delta = datetime.timedelta(seconds=elapsed_time)
+    elapsed_delta = dt.timedelta(seconds=elapsed_time)
     print('Finished (%s). R: %s. Tau: %s. Death optim: %s. Time: %s' % (proc_number,
                                                                         r,
                                                                         tau,
@@ -815,7 +816,7 @@ def run_parallel_optimizations():
             filename = res.get()
             result_filenames.append(filename)
     elapsed_time = time.time() - start_time
-    elapsed_delta = datetime.timedelta(seconds=elapsed_time)
+    elapsed_delta = dt.timedelta(seconds=elapsed_time)
     print('Finished experiments. Elapsed: %s' % (elapsed_delta, ))
     print('Resulting filenames: %s' % (result_filenames, ))
 
