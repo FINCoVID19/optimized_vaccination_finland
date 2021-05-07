@@ -166,6 +166,7 @@ EXPERIMENTS = {
         (False, 'Optimized Hosp')
     ],
     'search_num_ws': 10,
+    'u_offset': 5,
 }
 
 EPIDEMIC = {

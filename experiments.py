@@ -8,7 +8,7 @@ import time
 import datetime
 
 
-def get_experiments_results(num_age_groups, num_ervas, e, taus,
+def get_experiments_results(num_age_groups, num_ervas, e, taus, u_offset,
                             init_vacc, strategies, u, T, r_experiments, t0):
     experiments_params = {
         'num_ervas': num_ervas,
@@ -69,7 +69,7 @@ def get_experiments_results(num_age_groups, num_ervas, e, taus,
                         u_op_file_path = None
                         exec_experiment = False
                     # Forcing T to be 110 to match optimized files
-                    T_forward = 110
+                    T_forward = T - u_offset
                 else:
                     exec_experiment = True
                     u_op_file_path = None
