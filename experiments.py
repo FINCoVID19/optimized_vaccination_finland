@@ -65,7 +65,9 @@ def get_experiments_results(num_age_groups, num_ervas, e, taus, u_offset,
                     u_op_file_path = os.path.join(dir_path, 'out', u_op_file)
                     if os.path.isfile(u_op_file_path):
                         exec_experiment = True
+                        print('Found file: %s' % (u_op_file_path, ))
                     else:
+                        print('File not found: %s' % (u_op_file_path, ))
                         u_op_file_path = None
                         exec_experiment = False
                     # Forcing T to be 110 to match optimized files
