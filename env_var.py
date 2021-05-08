@@ -150,7 +150,7 @@ EXPERIMENTS = {
     'simulate_T': 115,
     'r_effs': [0.75, 1.0, 1.25, 1.5],
     'init_vacc': True,
-    'taus': [0.0, 0.5, 1.0],
+    'taus': [0, 0.5, 1],
     'num_ervas': 5,
     'num_age_groups': 9,
     'strategies': [
@@ -162,8 +162,7 @@ EXPERIMENTS = {
         ([0, 1/2, 1/2], 'Hosp and Inf'),
         ([0, 0, 1], 'Hosp only'),
         ([0, 1, 0], 'Inf only'),
-        (True, 'Optimized Death'),
-        (False, 'Optimized Hosp')
+        (True, 'Optimized'),
     ],
     'search_num_ws': 10,
     'u_offset': 5,
