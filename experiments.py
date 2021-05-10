@@ -154,8 +154,8 @@ def execute_parallel_forward(**params):
     results = {
         'total hospitalizations': total_hosp*age_er_prop,
         'infectious people': I_g*age_er_prop,
-        'infections': infs_i*age_er_prop,
-        'deaths': deaths_incidence*age_er_prop,
+        'incidence': infs_i*age_er_prop,
+        'mortality': deaths_incidence*age_er_prop,
         'vaccinations': u_g*age_er_prop,
         'vaccinations_raw': u_g,
         'new hospitalizations': hops_i*age_er_prop,
