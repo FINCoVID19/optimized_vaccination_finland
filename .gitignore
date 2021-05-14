@@ -11,5 +11,5 @@ compare_infections_diff_rs.ipynb
 env
 *.log
 
-# Vaccination policies
-u_*.npy
+# Output plots
+img
