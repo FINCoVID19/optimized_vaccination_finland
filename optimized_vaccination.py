@@ -752,7 +752,7 @@ def optimize(filename, beta_sim=0.03559801015581483, r=1.0, death_optim_in=False
 
 
 def run_optimize(r, beta_sim, tau, death_optim_in):
-    filename = "%ssol_tau%s_deathoptim%s.npy" % (r, tau, death_optim_in)
+    filename = "R_%s_op_sol_tau%s.npy" % (r, tau, death_optim_in)
     try:
         start_time = time.time()
         proc_number = os.getpid()
@@ -788,18 +788,6 @@ def run_optimize(r, beta_sim, tau, death_optim_in):
 
 def run_parallel_optimizations():
     all_experiments = [
-        (0.75,  0.,  0.016577192790495632, True),
-        (0.75,  0.5,  0.017420081058752156, True),
-        (0.75,  1.0,  0.017799005077907416, True),
-        (1.0,  0.,  0.022102923720660844, True),
-        (1.0,  0.5,  0.023226774745002877, True),
-        (1.0,  1.0,  0.023732006770543223, True),
-        (1.25,  0.,  0.027628654650826055, True),
-        (1.25,  0.5,  0.029033468431253595, True),
-        (1.25,  1.0,  0.02966500846317903, True),
-        (1.5,  0.,  0.033154385580991264, True),
-        (1.5,  0.5,  0.03484016211750431, True),
-        (1.5,  1.0,  0.03559801015581483, True),
         (0.75,  0.,  0.016577192790495632, False),
         (0.75,  0.5,  0.017420081058752156, False),
         (0.75,  1.0,  0.017799005077907416, False),

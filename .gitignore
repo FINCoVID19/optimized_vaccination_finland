@@ -6,6 +6,8 @@ __pycache__
 # NB used for testing
 Untitled.ipynb
 compare_infections_diff_rs.ipynb
+relation_w1_and_r.ipynb
+plot_vaccination.ipynb
 
 # Local env files
 env
