@@ -61,7 +61,7 @@ def get_experiments_results(num_age_groups, num_ervas, e, taus, u_offset,
                 # ws is None mean go to optimized strategy
                 if type(ws) is not list:
                     dir_path = os.path.dirname(os.path.realpath(__file__))
-                    u_op_file = "%ssol_tau%s_deathoptim%s.npy" % (r, tau, ws)
+                    u_op_file = 'R_%s_op_sol_tau%s.npy' % (r, tau)
                     u_op_file_path = os.path.join(dir_path, 'out', u_op_file)
                     if os.path.isfile(u_op_file_path):
                         exec_experiment = True
@@ -70,12 +70,9 @@ def get_experiments_results(num_age_groups, num_ervas, e, taus, u_offset,
                         print('File not found: %s' % (u_op_file_path, ))
                         u_op_file_path = None
                         exec_experiment = False
-                    # Forcing T to be 110 to match optimized files
-                    T_forward = T - u_offset
                 else:
                     exec_experiment = True
                     u_op_file_path = None
-                    T_forward = T
 
                 if exec_experiment:
                     num_experiments += 1
@@ -84,7 +81,7 @@ def get_experiments_results(num_age_groups, num_ervas, e, taus, u_offset,
                         'c1': tau_params[tau]['mob_av'],
                         'beta': beta,
                         'c_gh': tau_params[tau]['beta_gh'],
-                        'T': T_forward,
+                        'T': T,
                         'pop_hat': tau_params[tau]['pop_erva_hat'],
                         'age_er': age_er,
                         't0': t0,
@@ -157,8 +154,8 @@ def execute_parallel_forward(**params):
     results = {
         'total hospitalizations': total_hosp*age_er_prop,
         'infectious people': I_g*age_er_prop,
-        'infections': infs_i*age_er_prop,
-        'deaths': deaths_incidence*age_er_prop,
+        'incidence': infs_i*age_er_prop,
+        'mortality': deaths_incidence*age_er_prop,
         'vaccinations': u_g*age_er_prop,
         'vaccinations_raw': u_g,
         'new hospitalizations': hops_i*age_er_prop,

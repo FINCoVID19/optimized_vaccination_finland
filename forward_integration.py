@@ -149,7 +149,7 @@ def forward_integration(u_con, c1, beta, c_gh, T, pop_hat, age_er,
 
             # Get the normalized counts of infected people and hosp
             hosp_norm, hosp = get_metric_erva_weigth(H_wg+H_cg+H_rg, j, delay_check_vacc, use_ervas)
-            infe_norm, infe = get_metric_erva_weigth(I_g, j, delay_check_vacc, use_ervas)
+            infe_norm, infe = get_metric_erva_weigth(infections_incidence, j, delay_check_vacc, use_ervas)
             # Construct the final policy
             policy = ws_vacc[0]*pops_erva_prop + ws_vacc[1]*infe_norm + ws_vacc[2]*hosp_norm
 
@@ -423,41 +423,3 @@ def get_model_parameters(number_age_groups, num_ervas, init_vacc, t0, tau):
     rho = np.abs(np.amax(eig_vals))
 
     return mob_av, beta_gh, pop_erva_hat, age_er, rho
-
-
-if __name__ == "__main__":
-    num_age_groups = EXPERIMENTS['num_age_groups']
-    num_ervas = EXPERIMENTS['num_ervas']
-    t0 = EXPERIMENTS['t0']
-    init_vacc = EXPERIMENTS['init_vacc']
-    inc_mob = EXPERIMENTS['inc_mob']
-
-    mob_av, beta_gh, pop_erva_hat, age_er, rho = get_model_parameters(num_age_groups,
-                                                                      num_ervas,
-                                                                      init_vacc,
-                                                                      t0,
-                                                                      inc_mob)
-
-    rs = EXPERIMENTS['r_effs']
-    print('rho: %f' % (rho, ))
-    for r in rs:
-        beta = r/rho
-        print('R: %f. Beta: %f' % (r, beta))
-
-    T = EXPERIMENTS['simulate_T']
-    reff = 1.5
-    beta = reff/rho
-    u = EXPERIMENTS['vaccines_per_day']
-    checks = False
-    S_g, E_g, H_wg, H_cg, H_rg, I_g, D_g, u_g, hosp_g = forward_integration(
-                                                            u_con=u,
-                                                            c1=mob_av,
-                                                            beta=beta,
-                                                            c_gh=beta_gh,
-                                                            T=T,
-                                                            pop_hat=pop_erva_hat,
-                                                            age_er=age_er,
-                                                            t0=t0,
-                                                            init_vacc=init_vacc,
-                                                            checks=checks
-                                                        )
