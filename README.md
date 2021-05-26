@@ -1,6 +1,8 @@
-# Vaccination strategies in Finland.
+# Adaptive and optimized COVID-19 vaccination strategies across geographical regions and age groups.
 
-The purpose of this repository is to generate the state of the epidemic in Finland at any given day. Then use the generated state to run simulations with different vaccination strategies and obtain some metrics or observables considerating different scenarios.
+Check our preprint [here](https://arxiv.org/abs/2105.11562).
+
+The purpose of this repository is to generate the state of the epidemic in Finland at any given day and then use the generated state to run simulations with different vaccination strategies and obtain some metrics/observables considerating different scenarios.
 
 Organization of the repository:
 - `fetch_data.py`: API calls and parsing of the data to construct the state of the epidemic.
@@ -46,4 +48,4 @@ The results of the optimized vaccination strategy as well as the comparison of i
 ```sh
 compare_vaccination_strategies.ipynb
 ```
-In the notebook serverall experiments are ran and plotted. The notebook uses the file `experiments.py` to produce the results.
+In the notebook several experiments are ran and plotted. The notebook uses the file `experiments.py` to produce the results.
