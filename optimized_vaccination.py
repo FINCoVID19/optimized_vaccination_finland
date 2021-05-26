@@ -12,9 +12,11 @@ from multiprocessing import Pool
 import datetime as dt
 
 
-def get_vac(u_con, c1, beta, c_gh, T, pop_hat, age_er):
+def sol(u_con, mob_av, beta, beta_gh, T, pop_hat, age_er):
     num_ervas, num_age_groups = age_er.shape
-    # Time periods for epidemic
+    N_g = num_age_groups
+    N_p = num_ervas
+
     T_E = EPIDEMIC['T_E']
     T_V = EPIDEMIC['T_V']
     T_I = EPIDEMIC['T_I']
@@ -23,7 +25,6 @@ def get_vac(u_con, c1, beta, c_gh, T, pop_hat, age_er):
     T_hw = EPIDEMIC['T_hw']
     T_hc = EPIDEMIC['T_hc']
     T_hr = EPIDEMIC['T_hr']
-    e = EPIDEMIC['e']
 
     # Fraction of nonhospitalized that dies
     mu_q = EPIDEMIC['mu_q'][num_age_groups]
@@ -36,27 +37,22 @@ def get_vac(u_con, c1, beta, c_gh, T, pop_hat, age_er):
     # Fraction of hospitalized needing critical care
     p_c = EPIDEMIC['p_c'][num_age_groups]
     alpha = EPIDEMIC['alpha']
+    e = EPIDEMIC['e']
 
-    N_g = num_age_groups
-    N_p = num_ervas
-    N_t = 6
-
-    # Reading CSV
-    t0 = EXPERIMENTS['t0']
+    N_t = T
 
     # Reading CSV
-    dir_path = os.path.dirname(os.path.realpath(__file__))
-    csv_name = 'epidemic_finland_%d.csv' % (num_age_groups, )
-    csv_path = os.path.join(dir_path, 'out', csv_name)
+    t0 = '2021-04-18'
+    csv_name = 'out/epidemic_finland_9.csv'
     # Reading CSV
-    epidemic_csv = pd.read_csv(csv_path)
+    epidemic_csv = pd.read_csv(csv_name)
     # Getting only date t0
     epidemic_zero = epidemic_csv.loc[epidemic_csv['date'] == t0, :]
     # Removing Ahvenanmaa or Aland
     epidemic_zero = epidemic_zero[~epidemic_zero['erva'].str.contains('land')]
 
     # Getting the order the ervas have inside the dataframe
-    ervas_order = EPIDEMIC['ervas_order']
+    ervas_order = ['HYKS', 'TYKS', 'TAYS', 'KYS', 'OYS']
     ervas_df = list(pd.unique(epidemic_zero['erva']))
     ervas_pd_order = [ervas_df.index(erva) for erva in ervas_order]
 
@@ -74,7 +70,6 @@ def get_vac(u_con, c1, beta, c_gh, T, pop_hat, age_er):
     epidemic_npy = epidemic_zero.values
     # Reshaping to 3d array
     epidemic_npy = epidemic_npy.reshape(N_p, N_g, len(select_columns))
-
     # Rearranging the order of the matrix with correct order
     epidemic_npy = epidemic_npy[ervas_pd_order, :]
 
@@ -114,249 +109,53 @@ def get_vac(u_con, c1, beta, c_gh, T, pop_hat, age_er):
     H_rg = np.zeros((N_g, N_p, N_t))
     S_vg = np.zeros((N_g, N_p, N_t))
 
-    # force of infection in equation (4)
-    def force_of_inf(I_h, c_gh, k, N_g, N_p, mob, pop_hat):
-        fi = 0.0
-        for h in range(N_g):
-            for m in range(N_p):
-                for l in range(N_p):
-                    fi = fi + (mob[k, m]*mob[l, m]*I_h[h, l]*c_gh[h]*age_er[l, h])/pop_hat[m]
-        return fi
-
     # I store the values for the force of infection (needed for the adjoint equations)
     L_g = np.zeros((N_g, N_p, N_t))
-    # cummulative number for all age groups and all ervas
-    D_d = np.zeros(N_t)
-    V_d = np.zeros(N_t)
-    hos = np.zeros((N_g, N_p, N_t))
-    u = np.zeros((N_g, N_p, N_t))
 
-    remain_last = 0
-    u_con = 30000.
-    age_group_indicators = np.array([N_g-1]*N_p)
-    for j in range(N_t-1):
-        u_con_remain = u_con + remain_last
-        remain_last = 0
-
-        # Checking which ervas have still people to be vaccinated
-        use_ervas = age_group_indicators != -1
-
-        # Proportional population of the ERVA
-        pops_erva_prop = np.zeros(pop_erva.shape)
-        # Only getting the missing ervas
-        use_pops = pop_erva[use_ervas]
-        # Normalizing with the population of the missing ervas
-        use_pops_prop = use_pops/np.sum(use_pops)
-
-        pops_erva_prop[use_ervas] = use_pops_prop
-        u_erva = u_con_remain*pops_erva_prop
-        d_hos = 0.0
-        d = 0.0
-        for g in range(N_g-1, -1, -1):
-            for n in range(N_p):
-                lambda_c = force_of_inf(I_g[:, :, j], c_gh[:, g], n, N_g, N_p, c1, pop_hat)
-                L_g[g, n, j] = beta*lambda_c
-                lambda_g = lambda_c
-
-                # Check if we still can vaccinate someone in this age group
-                if S_g[g, n, j] - beta*lambda_g*S_g[g, n, j] <= 0:
-                    age_group_indicators[n] = g - 1
-
-                    # If we reach here it means  that we have vaccines
-                    # that we are not goign to use. Distribute to next erva
-                    if g == 0 and u_erva[n] != 0:
-                        if n+1 < N_p:
-                            u_erva[n+1] += u_erva[n]
-                        else:
-                            # If the next erva is the last one then next timestep
-                            remain_last += u_erva[n]
-
-                # Assign the vaccines to the current age group and erva
-                age_group_indicator = age_group_indicators[n]
-
-                if age_group_indicator == g:
-                    # Get the total amount of vaccines
-                    u[g, n, j] += u_erva[n]/age_er[n, g]
-
-                    # Check for leftovers in the current age group
-                    all_aplied = S_g[g, n, j] - beta*lambda_g*S_g[g, n, j] - u[g, n, j]
-                    # We have some leftovers
-                    if all_aplied < 0:
-                        # Indicate that we should continue to next age group
-                        age_group_indicators[n] = g - 1
-                        # Get the number of leftovers
-                        left_over = np.abs(all_aplied)
-                        left_over_real = left_over*age_er[n, g]
-                        # The next age group will only have the lefotvers
-                        if g-1 >= 0:
-                            u_erva[n] = left_over_real
-                        # If we finnish with the age groups then give to the next erva
-                        elif n+1 < N_p:
-                            u_erva[n+1] += left_over_real
-                        # If it was the last erva then keep the vaccines for next timestep
-                        else:
-                            remain_last += left_over_real
-
-                u[g, n, j] = min(u[g,n, j], max(0.0, S_g[g, n, j] - beta*lambda_g*S_g[g, n, j]))
-                S_g[g, n, j+1] = S_g[g, n, j] - beta*lambda_g*S_g[g, n, j] - u[g, n, j]
-                S_vg[g, n, j+1] = S_vg[g, n, j] - beta*lambda_g*S_vg[g, n, j] + u[g, n, j] - T_V*S_vg[g, n, j]
-                S_xg[g, n, j+1] = S_xg[g, n, j] - beta*lambda_g*S_xg[g, n, j] + (1.-alpha*e)*T_V*S_vg[g, n, j]
-                V_g[g, n, j+1] = V_g[g, n, j] + alpha*e*T_V*S_vg[g, n, j]
-                E_g[g, n, j+1] = E_g[g, n, j] + beta*lambda_g*(S_g[g, n, j]+S_vg[g, n, j] + S_xg[g, n, j]) - T_E*E_g[g, n, j]
-                I_g[g, n, j+1] = I_g[g, n, j] + T_E*E_g[g, n, j] - T_I*I_g[g, n, j]
-                Q_0g[g, n, j+1] = Q_0g[g, n, j] + (1.-p_H[g])*T_I*I_g[g, n, j] - T_q0*Q_0g[g, n, j]
-                Q_1g[g, n, j+1] = Q_1g[g, n, j] + p_H[g]*T_I*I_g[g, n, j] - T_q1*Q_1g[g, n, j]
-                H_wg[g, n, j+1] = H_wg[g, n, j] + T_q1*Q_1g[g, n, j] - T_hw*H_wg[g, n, j]
-                H_cg[g, n, j+1] = H_cg[g, n, j] + p_c[g]*T_hw*H_wg[g, n, j] - T_hc*H_cg[g, n, j]
-                H_rg[g, n, j+1] = H_rg[g, n, j] + (1.-mu_c[g])*T_hc*H_cg[g, n, j] - T_hr*H_rg[g, n, j]
-                R_g[g, n, j+1] = R_g[g, n, j] + T_hr*H_rg[g, n, j] + (1.-mu_w[g])*(1.-p_c[g])*T_hw*H_wg[g, n, j] + (1.-mu_q[g])*T_q0*Q_0g[g, n, j]
-                D_g[g, n, j+1] = D_g[g, n, j] + mu_q[g]*T_q0*Q_0g[g, n, j]+mu_w[g]*(1.-p_c[g])*T_hw*H_wg[g, n, j] + mu_c[g]*T_hc*H_cg[g, n, j]
-
-                d_hos = d_hos + T_q1*Q_1g[g, n, j]*age_er[n, g]
-                d = d + D_g[g, n, j+1]*age_er[n, g]
-
-        D_d[j] = d_hos
-
-        S0 = S_g[:, :, N_t-1]
-        Sv0 = S_vg[:, :, N_t-1]
-        Sx0 = S_xg[:, :, N_t-1]
-        V0 = V_g[:, :, N_t-1]
-        E0 = E_g[:, :, N_t-1]
-        I0 = I_g[:, :, N_t-1]
-        Q00 = Q_0g[:, :, N_t-1]
-        Q01 = Q_1g[:, :, N_t-1]
-        Hw0 = H_wg[:, :, N_t-1]
-        Hc0 = H_cg[:, :, N_t-1]
-        Hr0 = H_rg[:, :, N_t-1]
-        Rg0 = R_g[:, :, N_t-1]
-        D0 = D_g[:, :, N_t-1]
-
-    return S0, Sv0, Sx0, V0, E0, I0, Q00, Q01, Hw0, Hc0, Hr0, Rg0, D0, sum(D_d)
-
-
-def sol(u_con, c1, beta, c_gh, T, pop_hat, age_er):
-    num_ervas, num_age_groups = age_er.shape
-    N_g = num_age_groups
-    N_p = num_ervas
-
-    T_E = EPIDEMIC['T_E']
-    T_V = EPIDEMIC['T_V']
-    T_I = EPIDEMIC['T_I']
-    T_q0 = EPIDEMIC['T_q0']
-    T_q1 = EPIDEMIC['T_q1']
-    T_hw = EPIDEMIC['T_hw']
-    T_hc = EPIDEMIC['T_hc']
-    T_hr = EPIDEMIC['T_hr']
-
-    # Fraction of nonhospitalized that dies
-    mu_q = EPIDEMIC['mu_q'][num_age_groups]
-    # Fraction of hospitalized that dies
-    mu_w = EPIDEMIC['mu_w'][num_age_groups]
-    # Fraction of inds. In critical care that dies
-    mu_c = EPIDEMIC['mu_c'][num_age_groups]
-    # Fraction of infected needing health care
-    p_H = EPIDEMIC['p_H'][num_age_groups]
-    # Fraction of hospitalized needing critical care
-    p_c = EPIDEMIC['p_c'][num_age_groups]
-    alpha = EPIDEMIC['alpha']
-    e = EPIDEMIC['e']
-
-    N_t = T
-    # Allocating space for compartments
-    S_g = np.zeros((N_g, N_p, N_t))
-    I_g = np.zeros((N_g, N_p, N_t))
-    E_g = np.zeros((N_g, N_p, N_t))
-    R_g = np.zeros((N_g, N_p, N_t))
-    V_g = np.zeros((N_g, N_p, N_t))
-    H_wg = np.zeros((N_g, N_p, N_t))
-    H_cg = np.zeros((N_g, N_p, N_t))
-    D_g = np.zeros((N_g, N_p, N_t))
-    Q_0g = np.zeros((N_g, N_p, N_t))
-    Q_1g = np.zeros((N_g, N_p, N_t))
-    H_rg = np.zeros((N_g, N_p, N_t))
-    S_vg = np.zeros((N_g, N_p, N_t))
-    S_xg = np.zeros((N_g, N_p, N_t))
-    s0, svg0, sxg0, vg0, eg0, ig0, q0, q1, hw0, hc0, hr0, rg0, dg0, D1 = get_vac(30000., c1, beta, c_gh, T, pop_hat, age_er)
-
-    S_g[:, :, 0] = s0
-    S_vg[:, :, 0] = svg0
-    S_xg[:, :, 0] = sxg0
-
-    I_g[:, :, 0] = ig0
-    Q_0g[:, :, 0] = q0
-    Q_1g[:, :, 0] = q1
-    E_g[:, :, 0] = eg0
-    H_wg[:, :, 0] = hw0
-    H_cg[:, :, 0] = hc0
-    R_g[:, :, 0] = rg0
-    H_rg[:, :, 0] = hr0
-    V_g[:, :, 0] = vg0
-    D_g[:, :, 0] = dg0
-
-    # force of infection in equation (4)
-    def force_of_inf(I_h, c_gh, k, N_g, N_p, mob, pop_hat):
-        fi = 0.0
-        for h in range(N_g):
-            for m in range(N_p):
-                for l in range(N_p):
-                    fi = fi + (mob[k, m]*mob[l, m]*I_h[h, l]*c_gh[h]*age_er[l, h])/pop_hat[m]
-
-        return fi
-
-    # I store the values for the force of infection (needed for the adjoint equations)
-    L_g = np.zeros((N_g, N_p, N_t))
-    # cummulative number for all age groups and all ervas
-    D_d = np.zeros(N_t)
-    V_d = np.zeros(N_t)
+    # number of hospitalizations
+    D_d = np.zeros((N_g, N_p, N_t))
 
     u = np.zeros((N_g, N_p, N_t))
 
+    p_H_ages = p_H[:, np.newaxis]
+    p_c_ages = p_c[:, np.newaxis]
+    mu_c_ages = mu_c[:, np.newaxis]
+    mu_w_ages = mu_w[:, np.newaxis]
+    mu_q_ages = mu_q[:, np.newaxis]
+
+    age_er_t = age_er.T
+    mob_k_pop = mob_av/pop_hat[np.newaxis, :]
+    mobility_term = mob_av@mob_k_pop.T
     for j in range(N_t-1):
-        d_hos = 0.0
-        v_0 = 0.0
-        for g in range(N_g-1, -1, -1):
-            for n in range(N_p):
-                lambda_c = force_of_inf(I_g[:, :, j], c_gh[:, g], n, N_g, N_p, c1, pop_hat)
-                L_g[g, n, j] = beta*lambda_c
-                lambda_g = lambda_c
+        # force of infection in equation (4)
+        infect_mobility = (I_g[:, :, j]*age_er_t)@mobility_term.T
+        lambda_g = beta_gh.T@infect_mobility
 
-                u[g, n, j] = min(u_con[g, n, j], max(0.0, S_g[g, n, j] - beta*lambda_g*S_g[g, n, j]))
-                v_0 = v_0 + u[g, n, j]*age_er[n, g]
-                S_g[g, n, j+1] = S_g[g, n, j] - beta*lambda_g*S_g[g, n, j] - u[g, n, j]
-                S_vg[g, n, j+1] = S_vg[g, n, j] - beta*lambda_g*S_vg[g, n, j] + u[g, n, j] - T_V*S_vg[g, n, j]
-                S_xg[g, n, j+1] = S_xg[g, n, j] - beta*lambda_g*S_xg[g, n, j] + (1.-alpha*e)*T_V*S_vg[g, n, j]
-                V_g[g, n, j+1] = V_g[g, n, j] + alpha*e*T_V*S_vg[g, n, j]
-                E_g[g, n, j+1] = E_g[g, n, j] + beta*lambda_g*(S_g[g, n, j]+S_vg[g, n, j] + S_xg[g, n, j]) - T_E*E_g[g, n, j]
-                I_g[g, n, j+1] = I_g[g, n, j] + T_E*E_g[g, n, j] - T_I*I_g[g, n, j]
-                Q_0g[g, n, j+1] = Q_0g[g, n, j] + (1.-p_H[g])*T_I*I_g[g, n, j] - T_q0*Q_0g[g, n, j]
-                Q_1g[g, n, j+1] = Q_1g[g, n, j] + p_H[g]*T_I*I_g[g, n, j] - T_q1*Q_1g[g, n, j]
-                H_wg[g, n, j+1] = H_wg[g, n, j] + T_q1*Q_1g[g, n, j] - T_hw*H_wg[g, n, j]
-                H_cg[g, n, j+1] = H_cg[g, n, j] + p_c[g]*T_hw*H_wg[g, n, j] - T_hc*H_cg[g, n, j]
-                H_rg[g, n, j+1] = H_rg[g, n, j] + (1.-mu_c[g])*T_hc*H_cg[g, n, j] - T_hr*H_rg[g, n, j]
-                R_g[g, n, j+1] = R_g[g, n, j] + T_hr*H_rg[g, n, j] + (1.-mu_w[g])*(1.-p_c[g])*T_hw*H_wg[g, n, j] + (1.-mu_q[g])*T_q0*Q_0g[g, n, j]
-                D_g[g, n, j+1] = D_g[g, n, j] + mu_q[g]*T_q0*Q_0g[g, n, j]+mu_w[g]*(1.-p_c[g])*T_hw*H_wg[g, n, j] + mu_c[g]*T_hc*H_cg[g, n, j]
+        L_g[:, :, j] = beta*lambda_g
 
-                if death_optim:
-                    d_hos = d_hos + D_g[g, n, j+1]*age_er[n, g] # T_q1*Q_1g[g, n, j]*age_er[n,g]
-                else:
-                    d_hos = d_hos + T_q1*Q_1g[g, n, j]*age_er[n, g]
+        u[:, :, j] = np.minimum(u_con[:, :, j], np.maximum(0.0, S_g[:, :, j] - beta*lambda_g*S_g[:, :, j]))
+        S_g[:, :, j+1] = S_g[:, :, j] - beta*lambda_g*S_g[:, :, j] - u[:, :, j]
+        S_vg[:, :, j+1] = S_vg[:, :, j] - beta*lambda_g*S_vg[:, :, j] + u[:, :, j] - T_V*S_vg[:, :, j]
+        S_xg[:, :, j+1] = S_xg[:, :, j] - beta*lambda_g*S_xg[:, :, j] + (1.-alpha*e)*T_V*S_vg[:, :, j]
+        V_g[:, :, j+1] = V_g[:, :, j] + alpha*e*T_V*S_vg[:, :, j]
+        E_g[:, :, j+1] = E_g[:, :, j] + beta*lambda_g*(S_g[:, :, j]+S_vg[:, :, j] + S_xg[:, :, j]) - T_E*E_g[:, :, j]
+        I_g[:, :, j+1] = I_g[:, :, j] + T_E*E_g[:, :, j] - T_I*I_g[:, :, j]
+        Q_0g[:, :, j+1] = Q_0g[:, :, j] + (1-p_H_ages)*T_I*I_g[:, :, j] - T_q0*Q_0g[:, :, j]
+        Q_1g[:, :, j+1] = Q_1g[:, :, j] + p_H_ages*T_I*I_g[:, :, j] - T_q1*Q_1g[:, :, j]
+        H_wg[:, :, j+1] = H_wg[:, :, j] + T_q1*Q_1g[:, :, j] - T_hw*H_wg[:, :, j]
+        H_cg[:, :, j+1] = H_cg[:, :, j] + p_c_ages*T_hw*H_wg[:, :, j] - T_hc*H_cg[:, :, j]
+        H_rg[:, :, j+1] = H_rg[:, :, j] + (1-mu_c_ages)*T_hc*H_cg[:, :, j] - T_hr*H_rg[:, :, j]
+        R_g[:, :, j+1] = R_g[:, :, j] + T_hr*H_rg[:, :, j] + (1-mu_w_ages)*(1-p_c_ages)*T_hw*H_wg[:, :, j] + (1-mu_q_ages)*T_q0*Q_0g[:, :, j]
+        D_g[:, :, j+1] = D_g[:, :, j] + mu_q_ages*T_q0*Q_0g[:, :, j]+mu_w_ages*(1-p_c_ages)*T_hw*H_wg[:, :, j] + mu_c_ages*T_hc*H_cg[:, :, j]
 
-        if death_optim:
-            D_d[j+1] = d_hos
-        else:
-            D_d[j] = d_hos
-        V_d[j] = v_0
+        D_d[:, :, j] = T_q1*Q_1g[:, :, j]*age_er_t
 
-    if death_optim:
-        return S_g, S_vg, S_xg, L_g, D_d.max(), V_d, u
-    else:
-        Df = 0.0
-        for h in range(N_g):
-            for k in range(N_p):
-                Df = Df + T_q1*Q_1g[h, k, N_t-1]*age_er[k, h]
-        D_d[N_t-1] = Df
-        # np.save("u0.npy", u)
-        return S_g, S_vg, S_xg, L_g, sum(D_d), V_d, u
+    D_d[:, :, N_t-1] = T_q1*Q_1g[:, :, N_t-1]*age_er_t
+
+    V_d = u*age_er_t[:, :, np.newaxis]
+    V_d = V_d.sum(axis=(0, 1))
+
+    return S_g, S_vg, S_xg, L_g, D_d.sum(), V_d, u
 
 
 def back_int(Sg, Sv, Sx, Lg, nu, c_hg, beta, T, age_er, mob, pop_erva, ind):
@@ -401,49 +200,37 @@ def back_int(Sg, Sv, Sx, Lg, nu, c_hg, beta, T, age_er, mob, pop_erva, ind):
     lHr = np.zeros((N_g, N_p, N_t))
     lD = np.zeros((N_g, N_p, N_t))
 
-    dH = np.zeros((N_g, N_p, N_t))
-    for i in range(N_t-1, -1, -1):
+    dH = np.zeros((N_g,N_p,N_t))
+    for i in range(N_t-1,-1,-1):
         for g in range(N_g):
             for n in range(N_p):
-                lS[g, n, i-1] = lS[g, n, i] - lS[g, n, i]*Lg[g+ind, n, i] + lE[g, n, i]*Lg[g+ind, n, i]
-                lSv[g, n, i-1] = lSv[g, n, i] - lSv[g, n, i]*(Lg[g+ind, n, i] + T_V) + lE[g, n, i]*Lg[g+ind, n, i]
-                lSx[g, n, i-1] = lSx[g, n, i] - lSx[g, n, i]*Lg[g+ind, n, i] + lE[g, n, i]*Lg[g+ind, n, i]\
-                    + lSv[g, n, i]*(1.-alpha*e)*T_V
+                lS[g,n,i-1] = lS[g,n,i] - lS[g,n,i]*Lg[g+ind,n,i]  + lE[g,n,i]*Lg[g+ind,n,i]
+                lSv[g,n,i-1] = lSv[g,n,i] - lSv[g,n,i]*(Lg[g+ind,n,i] + T_V)  + lE[g,n,i]*Lg[g+ind,n,i]
+                lSx[g,n,i-1] = lSx[g,n,i] - lSx[g,n,i]*Lg[g+ind,n,i]  + lE[g,n,i]*Lg[g+ind,n,i]\
+                    + lSv[g,n,i]*(1.-alpha*e)*T_V 
 
-                lE[g, n, i-1] = lE[g, n, i] - (lE[g, n, i]-lI[g, n, i])*T_E
-                sumh = 0.0
+                lE[g,n,i-1] = lE[g,n,i] - (lE[g,n,i]-lI[g,n,i])*T_E
+                sumh = 0.0 
                 sumh2 = 0.0
                 sumh3 = 0.0
                 for h in range(N_g):
                     for k in range(N_p):
                         for m in range(N_p):
-                            mob_k = mob[k, m]*mob[n, m]/pop_erva[m]
-                            sumh = sumh + beta*c_hg[g+ind, h+ind]*Sg[h+ind, k, i]*mob_k*(lE[h, k, i] - lS[h, k, i])/age_er[k, h+ind]
-                            sumh2 = sumh2 + beta*c_hg[g+ind, h+ind]*Sv[h+ind, k, i]*mob_k*(lE[h, k, i] - lSv[h, k, i])/age_er[k, h+ind]
-                            sumh3 = sumh + beta*c_hg[g+ind, h+ind]*Sx[h+ind, k, i]*mob_k*(lE[h, k, i] - lSx[h, k, i])/age_er[k, h+ind]
+                            mob_k = mob[k,m]*mob[n,m]/pop_erva[m]
+                            sumh = sumh  + beta*c_hg[g+ind,h+ind]*Sg[h+ind,k,i]*mob_k*(lE[h,k,i] - lS[h,k,i])/age_er[k,h+ind]
+                            sumh2 = sumh2  + beta*c_hg[g+ind,h+ind]*Sv[h+ind,k,i]*mob_k*(lE[h,k,i] - lSv[h,k,i])/age_er[k,h+ind]
+                            sumh3 = sumh  + beta*c_hg[g+ind,h+ind]*Sx[h+ind,k,i]*mob_k*(lE[h,k,i] - lSx[h,k,i])/age_er[k,h+ind]
 
-                lI[g, n, i-1] = lI[g, n, i] - T_I*lI[g, n, i] + sumh + sumh2 + sumh3 + lQ_0[g, n, i]*(1.-p_H[g+ind])*T_I \
-                    + lQ_1[g, n, i]*p_H[g+ind]*T_I
-                lQ_0[g, n, i-1] = lQ_0[g, n, i]*(1. - T_q0) + lD[g, n, i]*mu_q[g+ind]*T_q0
-
-                if death_optim:
-                    lQ_1[g, n, i-1] = lQ_1[g, n, i]*(1. - T_q1) + lHw[g, n, i]*T_q1  #+ T_q1
-                else:
-                    lQ_1[g, n, i-1] = lQ_1[g, n, i]*(1. - T_q1) + lHw[g, n, i]*T_q1 + T_q1
-
-                lHw[g, n, i-1] = lHw[g, n, i]*(1.-T_hw) + lHc[g, n, i]*p_c[g+ind]*T_hw \
-                    + lD[g, n, i]*mu_w[g+ind]*(1.-p_c[g+ind])*T_hw
-                lHc[g, n, i-1] = lHc[g, n, i]*(1.-T_hc) + lHr[g, n, i]*(1.-mu_c[g+ind])*T_hc \
-                    + lD[g, n, i]*mu_c[g+ind]*T_hc
-                lHr[g, n, i-1] = lHr[g, n, i]*(1.-T_hr)
-
-                if death_optim:
-                    lD[g, n, i-1] = lD[g, n, i] + 1.
-
-                # if lS[g,n,i]>lSv[g,n,i]:
-                dH[g, n, i] = -lS[g, n, i] + lSv[g, n, i]
-            # else:
-            #   dH[g,n,i] = 0.0
+                lI[g,n,i-1] = lI[g,n,i] - T_I*lI[g,n,i] +sumh+ sumh2 + sumh3 + lQ_0[g,n,i]*(1.-p_H[g+ind])*T_I \
+                    +lQ_1[g,n,i]*p_H[g+ind]*T_I 
+                lQ_0[g,n,i-1] = lQ_0[g,n,i]*(1. - T_q0) + lD[g,n,i]*mu_q[g+ind]*T_q0
+                lQ_1[g,n,i-1] = lQ_1[g,n,i]*(1. - T_q1) + lHw[g,n,i]*T_q1   + T_q1
+                lHw[g,n,i-1] = lHw[g,n,i]*(1.-T_hw) + lHc[g,n,i]*p_c[g+ind]*T_hw \
+                    +lD[g,n,i]*mu_w[g+ind]*(1.-p_c[g+ind])*T_hw
+                lHc[g,n,i-1] = lHc[g,n,i]*(1.-T_hc) + lHr[g,n,i]*(1.-mu_c[g+ind])*T_hc \
+                    +lD[g,n,i]*mu_c[g+ind]*T_hc
+                lHr[g,n,i-1] = lHr[g,n,i]*(1.-T_hr)
+                dH[g,n,i] = -lS[g,n,i] + lSv[g,n,i]
 
     return dH
 

@@ -37,14 +37,14 @@ def get_experiments_results(num_age_groups, num_ervas, e, taus, u_offset,
 
     tau_params = {tau: {} for tau in taus}
     for tau in taus:
-        mob_av, beta_gh, pop_erva_hat, age_er, rho = get_model_parameters(num_age_groups,
-                                                                          num_ervas,
-                                                                          init_vacc,
-                                                                          t0,
-                                                                          tau)
+        mob_av, beta_gh, pop_hat, age_er, rho = get_model_parameters(num_age_groups,
+                                                                     num_ervas,
+                                                                     init_vacc,
+                                                                     t0,
+                                                                     tau)
         tau_params[tau]['mob_av'] = mob_av
         tau_params[tau]['beta_gh'] = beta_gh
-        tau_params[tau]['pop_erva_hat'] = pop_erva_hat
+        tau_params[tau]['pop_hat'] = pop_hat
         tau_params[tau]['rho'] = rho
 
     epidemic_npy = read_initial_values(age_er, init_vacc, t0)
@@ -82,7 +82,7 @@ def get_experiments_results(num_age_groups, num_ervas, e, taus, u_offset,
                         'beta': beta,
                         'c_gh': tau_params[tau]['beta_gh'],
                         'T': T,
-                        'pop_hat': tau_params[tau]['pop_erva_hat'],
+                        'pop_hat': tau_params[tau]['pop_hat'],
                         'age_er': age_er,
                         't0': t0,
                         'ws_vacc': ws,
@@ -177,14 +177,14 @@ def search_best_ws_r_metric(num_age_groups, num_ervas, init_vacc,
 
     tau_params = {tau: {} for tau in taus}
     for tau in taus:
-        mob_av, beta_gh, pop_erva_hat, age_er, rho = get_model_parameters(num_age_groups,
+        mob_av, beta_gh, pop_hat, age_er, rho = get_model_parameters(num_age_groups,
                                                                           num_ervas,
                                                                           init_vacc,
                                                                           t0,
                                                                           tau)
         tau_params[tau]['mob_av'] = mob_av
         tau_params[tau]['beta_gh'] = beta_gh
-        tau_params[tau]['pop_erva_hat'] = pop_erva_hat
+        tau_params[tau]['pop_hat'] = pop_hat
         tau_params[tau]['rho'] = rho
 
     epidemic_npy = read_initial_values(age_er, init_vacc, t0)
@@ -207,7 +207,7 @@ def search_best_ws_r_metric(num_age_groups, num_ervas, init_vacc,
                     'beta': beta,
                     'c_gh': tau_params[tau]['beta_gh'],
                     'T': T,
-                    'pop_hat': tau_params[tau]['pop_erva_hat'],
+                    'pop_hat': tau_params[tau]['pop_hat'],
                     'age_er': age_er,
                     't0': t0,
                     'ws_vacc': ws,

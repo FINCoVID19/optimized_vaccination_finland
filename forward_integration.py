@@ -5,7 +5,7 @@ from fetch_data import (
     static_population_erva_age,
 )
 from scipy.linalg import eigvals
-from env_var import EPIDEMIC, EXPERIMENTS
+from env_var import EPIDEMIC
 
 
 def forward_integration(u_con, c1, beta, c_gh, T, pop_hat, age_er,
@@ -39,7 +39,7 @@ def forward_integration(u_con, c1, beta, c_gh, T, pop_hat, age_er,
     p_c = EPIDEMIC['p_c'][num_age_groups]
     alpha = EPIDEMIC['alpha']
 
-    pop_erva = age_er.sum(axis=1)
+    pop_region = age_er.sum(axis=1)
     # Initializing all group indicators in the last group
     age_group_indicators = np.array([N_g-1]*N_p)
     delay_check_vacc = EPIDEMIC['delay_check_vacc']
@@ -140,9 +140,9 @@ def forward_integration(u_con, c1, beta, c_gh, T, pop_hat, age_er,
             use_ervas = age_group_indicators != -1
 
             # Proportional population of the ERVA
-            pops_erva_prop = np.zeros(pop_erva.shape)
+            pops_erva_prop = np.zeros(pop_region.shape)
             # Only getting the missing ervas
-            use_pops = pop_erva[use_ervas]
+            use_pops = pop_region[use_ervas]
             # Normalizing with the population of the missing ervas
             use_pops_prop = use_pops/np.sum(use_pops)
             pops_erva_prop[use_ervas] = use_pops_prop
@@ -293,21 +293,21 @@ def read_initial_values(age_er, init_vacc, t0):
 
 def get_model_parameters(number_age_groups, num_ervas, init_vacc, t0, tau):
     logger = logging.getLogger()
-    erva_pop_file = 'stats/erva_population_age_2020.csv'
-    pop_ervas_age, _ = static_population_erva_age(logger, erva_pop_file,
-                                                  number_age_groups=number_age_groups)
-    pop_ervas_age = pop_ervas_age[~pop_ervas_age['erva'].str.contains('All')]
-    pop_ervas_age = pop_ervas_age[~pop_ervas_age['erva'].str.contains('land')]
-    pop_ervas_age = pop_ervas_age.sort_values(['erva', 'age_group'])
-    pop_ervas_npy = pop_ervas_age['Total'].values
-    pop_ervas_npy = pop_ervas_npy.reshape(num_ervas, number_age_groups)
+    pop_file = 'stats/erva_population_age_2020.csv'
+    pop_regions_age, _ = static_population_erva_age(logger, pop_file,
+                                                    number_age_groups=number_age_groups)
+    pop_regions_age = pop_regions_age[~pop_regions_age['erva'].str.contains('All')]
+    pop_regions_age = pop_regions_age[~pop_regions_age['erva'].str.contains('land')]
+    pop_regions_age = pop_regions_age.sort_values(['erva', 'age_group'])
+    pop_regions_npy = pop_regions_age['Total'].values
+    pop_regions_npy = pop_regions_npy.reshape(num_ervas, number_age_groups)
 
     ervas_order = EPIDEMIC['ervas_order']
 
-    ervas_df = list(pd.unique(pop_ervas_age['erva']))
+    ervas_df = list(pd.unique(pop_regions_age['erva']))
     ervas_pd_order = [ervas_df.index(erva) for erva in ervas_order]
     # Rearrange rows in the correct order
-    age_er = pop_ervas_npy[ervas_pd_order, :]
+    age_er = pop_regions_npy[ervas_pd_order, :]
 
     if init_vacc:
         csv_name = 'out/epidemic_finland_%d.csv' % (number_age_groups, )
@@ -342,7 +342,7 @@ def get_model_parameters(number_age_groups, num_ervas, init_vacc, t0, tau):
     epidemic_sus = epidemic_sus[ervas_pd_order, :]
     # age_er = epidemic_sus
 
-    pop_erva = age_er.sum(axis=1)
+    pop_region = age_er.sum(axis=1)
 
     # Contact matrix
     c_gh_3 = EPIDEMIC['contact_matrix'][number_age_groups]
@@ -350,7 +350,7 @@ def get_model_parameters(number_age_groups, num_ervas, init_vacc, t0, tau):
     # Mobility matrix
     m_av = EPIDEMIC['mobility_matrix'][num_ervas]
 
-    m_av = m_av/pop_erva[:, np.newaxis]
+    m_av = m_av/pop_region[:, np.newaxis]
 
     # theta_km
     N_p = num_ervas
@@ -365,17 +365,17 @@ def get_model_parameters(number_age_groups, num_ervas, init_vacc, t0, tau):
 
     # Change in population size because of mobility
     # N_hat_{lg}, N_hat_{l}
-    pop_erva_hat = np.zeros(N_p)
+    pop_hat = np.zeros(N_p)
     age_er_hat = np.zeros((N_g, N_p))
 
     for m in range(N_p):
         m_k = 0.0
         for k in range(N_p):
-            m_k = m_k + pop_erva[k]*mob_av[k, m]
+            m_k = m_k + pop_region[k]*mob_av[k, m]
             for g in range(N_g):
                 age_er_hat[g, m] = sum(age_er[:, g]*mob_av[:, m])
 
-        pop_erva_hat[m] = m_k
+        pop_hat[m] = m_k
 
     # Population size per age group in all ervas
     age_pop = sum(age_er)
@@ -389,12 +389,12 @@ def get_model_parameters(number_age_groups, num_ervas, init_vacc, t0, tau):
                 for m in range(N_p):
                     sum_kg2 = 0.0
                     for k in range(N_p):
-                        sum_kg2 = sum_kg2 + age_er[k, g]*mob_av[k, m]*mob_av[k, m]/pop_erva_hat[m]
-                sum_kg = sum(age_er_hat[g, :]*age_er_hat[h, :]/pop_erva_hat)
+                        sum_kg2 = sum_kg2 + age_er[k, g]*mob_av[k, m]*mob_av[k, m]/pop_hat[m]
+                sum_kg = sum(age_er_hat[g, :]*age_er_hat[h, :]/pop_hat)
                 beta_gh[g, h] = age_pop[g]*c_gh_3[g, h]/(sum_kg-sum_kg2)
             else:
                 sum_kg = age_er_hat[g, :]*age_er_hat[h, :]
-                beta_gh[g, h] = age_pop[g]*c_gh_3[g, h]/(sum(sum_kg/pop_erva_hat))
+                beta_gh[g, h] = age_pop[g]*c_gh_3[g, h]/(sum(sum_kg/pop_hat))
 
     # Computing NGM and rho
     T_I = EPIDEMIC['T_I']**(-1)
@@ -416,10 +416,10 @@ def get_model_parameters(number_age_groups, num_ervas, init_vacc, t0, tau):
                     interaction_term = beta_ti_n_kg*beta_gh[g, h]
                     mobility_term = 0
                     for m in range(ks):
-                        mobility_term += mob_av[k, m]*mob_av[l, m]/pop_erva_hat[m]
+                        mobility_term += mob_av[k, m]*mob_av[l, m]/pop_hat[m]
                     next_gen_matrix[kg_idx, lh_idx] = interaction_term*mobility_term
 
     eig_vals = eigvals(next_gen_matrix)
     rho = np.abs(np.amax(eig_vals))
 
-    return mob_av, beta_gh, pop_erva_hat, age_er, rho
+    return mob_av, beta_gh, pop_hat, age_er, rho
