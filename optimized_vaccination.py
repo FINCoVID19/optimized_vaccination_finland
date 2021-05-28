@@ -158,7 +158,7 @@ def sol(u_con, mob_av, beta, beta_gh, T, pop_hat, age_er):
     return S_g, S_vg, S_xg, L_g, D_d.sum(), V_d, u
 
 
-def back_int(Sg, Sv, Sx, Lg, nu, c_hg, beta, T, age_er, mob, pop_hat, ind):
+def back_int(Sg, Sv, Sx, Lg, nu, beta_gh, beta, T, age_er, mob_av, pop_hat):
     num_ervas, num_age_groups = age_er.shape
 
     T_E = EPIDEMIC['T_E']
@@ -183,7 +183,7 @@ def back_int(Sg, Sv, Sx, Lg, nu, c_hg, beta, T, age_er, mob, pop_hat, ind):
     alpha = EPIDEMIC['alpha']
     e = EPIDEMIC['e']
 
-    N_g = 5
+    N_g = num_age_groups
     N_p = num_ervas
     N_t = T
 
@@ -200,47 +200,59 @@ def back_int(Sg, Sv, Sx, Lg, nu, c_hg, beta, T, age_er, mob, pop_hat, ind):
     lHr = np.zeros((N_g, N_p, N_t))
     lD = np.zeros((N_g, N_p, N_t))
 
-    dH = np.zeros((N_g,N_p,N_t))
-    for i in range(N_t-1,-1,-1):
-        for g in range(N_g):
-            for n in range(N_p):
-                lS[g,n,i-1] = lS[g,n,i] - lS[g,n,i]*Lg[g+ind,n,i]  + lE[g,n,i]*Lg[g+ind,n,i]
-                lSv[g,n,i-1] = lSv[g,n,i] - lSv[g,n,i]*(Lg[g+ind,n,i] + T_V)  + lE[g,n,i]*Lg[g+ind,n,i]
-                lSx[g,n,i-1] = lSx[g,n,i] - lSx[g,n,i]*Lg[g+ind,n,i]  + lE[g,n,i]*Lg[g+ind,n,i]\
-                    + lSv[g,n,i]*(1.-alpha*e)*T_V 
+    dH = np.zeros((N_g, N_p, N_t))
 
-                lE[g,n,i-1] = lE[g,n,i] - (lE[g,n,i]-lI[g,n,i])*T_E
+    mob_n = mob_av/pop_hat[np.newaxis, :]
+    mob_n = mob_n[:, np.newaxis, :]
+    mob_av_exp = mob_av[np.newaxis, :, :]
+    mob_k = mob_n*mob_av_exp
 
-                beta_term = beta*beta_gh[g, :]
-                beta_term = beta_term[:, np.newaxis]
+    beta_term = beta*beta_gh
+    beta_term = beta_term[:, np.newaxis, :]
 
-                mob_n = mob_av[n, :]/pop_hat
-                mob_n = mob_n[np.newaxis, :]
-                mob_k = mob_n*mob_av
+    p_H_ages = p_H[:, np.newaxis]
+    p_c_ages = p_c[:, np.newaxis]
+    mu_c_ages = mu_c[:, np.newaxis]
+    mu_w_ages = mu_w[:, np.newaxis]
+    mu_q_ages = mu_q[:, np.newaxis]
 
-                Sg_term = Sg[:, :, i]*((lE[:, :, i] - lS[:, :, i])/age_er.T)
-                Svg_term = Sv[:, :, i]*((lE[:, :, i] - lSv[:, :, i])/age_er.T)
-                Sxg_term = Sx[:, :, i]*((lE[:, :, i] - lSx[:, :, i])/age_er.T)
+    for i in range(N_t-1, -1, -1):
+        lS[:, :, i-1] = lS[:, :, i] - lS[:, :, i]*Lg[:, :, i] + lE[:, :, i]*Lg[:, :, i]
+        lSv[:, :, i-1] = lSv[:, :, i] - lSv[:, :, i]*(Lg[:, :, i] + T_V) + lE[:, :, i]*Lg[:, :, i]
+        lSx[:, :, i-1] = lSx[:, :, i] - lSx[:, :, i]*Lg[:, :, i] + lE[:, :, i]*Lg[:, :, i]\
+            + lSv[:, :, i]*(1-alpha*e)*T_V
 
-                sumh = beta_term*Sg_term@mob_k
-                sumh = np.sum(sumh)
+        lE[:, :, i-1] = lE[:, :, i] - (lE[:, :, i]-lI[:, :, i])*T_E
 
-                sumh2 = beta_term*Svg_term@mob_k
-                sumh2 = np.sum(sumh2)
+        Sg_term = Sg[:, :, i]*((lE[:, :, i] - lS[:, :, i])/age_er.T)
+        Svg_term = Sv[:, :, i]*((lE[:, :, i] - lSv[:, :, i])/age_er.T)
+        Sxg_term = Sx[:, :, i]*((lE[:, :, i] - lSx[:, :, i])/age_er.T)
 
-                sumh3 = beta_term*Sxg_term@mob_k
-                sumh3 = np.sum(sumh3)
+        part_sumh = beta_term*Sg_term.T
+        part_sumh = part_sumh.transpose(0, 2, 1)
+        sumh = np.einsum('ijk,lkm->iljk', part_sumh, mob_k)
+        sumh = sumh.sum(axis=(2, 3))
 
-                lI[g,n,i-1] = lI[g,n,i] - T_I*lI[g,n,i] +sumh+ sumh2 + sumh3 + lQ_0[g,n,i]*(1.-p_H[g+ind])*T_I \
-                    +lQ_1[g,n,i]*p_H[g+ind]*T_I 
-                lQ_0[g,n,i-1] = lQ_0[g,n,i]*(1. - T_q0) + lD[g,n,i]*mu_q[g+ind]*T_q0
-                lQ_1[g,n,i-1] = lQ_1[g,n,i]*(1. - T_q1) + lHw[g,n,i]*T_q1   + T_q1
-                lHw[g,n,i-1] = lHw[g,n,i]*(1.-T_hw) + lHc[g,n,i]*p_c[g+ind]*T_hw \
-                    +lD[g,n,i]*mu_w[g+ind]*(1.-p_c[g+ind])*T_hw
-                lHc[g,n,i-1] = lHc[g,n,i]*(1.-T_hc) + lHr[g,n,i]*(1.-mu_c[g+ind])*T_hc \
-                    +lD[g,n,i]*mu_c[g+ind]*T_hc
-                lHr[g,n,i-1] = lHr[g,n,i]*(1.-T_hr)
-                dH[g,n,i] = -lS[g,n,i] + lSv[g,n,i]
+        part_sumh2 = beta_term*Svg_term.T
+        part_sumh2 = part_sumh2.transpose(0, 2, 1)
+        sumh2 = np.einsum('ijk,lkm->iljk', part_sumh2, mob_k)
+        sumh2 = sumh2.sum(axis=(2, 3))
+
+        part_sumh3 = beta_term*Sxg_term.T
+        part_sumh3 = part_sumh3.transpose(0, 2, 1)
+        sumh3 = np.einsum('ijk,lkm->iljk', part_sumh3, mob_k)
+        sumh3 = sumh3.sum(axis=(2, 3))
+
+        lI[:, :, i-1] = lI[:, :, i] - T_I*lI[:, :, i] + sumh + sumh2 + sumh3 + lQ_0[:, :, i]*(1-p_H_ages)*T_I \
+            + lQ_1[:, :, i]*p_H_ages*T_I
+        lQ_0[:, :, i-1] = lQ_0[:, :, i]*(1. - T_q0) + lD[:, :, i]*mu_q_ages*T_q0
+        lQ_1[:, :, i-1] = lQ_1[:, :, i]*(1. - T_q1) + lHw[:, :, i]*T_q1 + T_q1
+        lHw[:, :, i-1] = lHw[:, :, i]*(1.-T_hw) + lHc[:, :, i]*p_c_ages*T_hw \
+            + lD[:, :, i]*mu_w_ages*(1.-p_c_ages)*T_hw
+        lHc[:, :, i-1] = lHc[:, :, i]*(1.-T_hc) + lHr[:, :, i]*(1.-mu_c_ages)*T_hc \
+            + lD[:, :, i]*mu_c_ages*T_hc
+        lHr[:, :, i-1] = lHr[:, :, i]*(1.-T_hr)
+        dH[:, :, i] = -lS[:, :, i] + lSv[:, :, i]
 
     return dH
 
