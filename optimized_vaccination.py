@@ -3,9 +3,9 @@ from scipy.optimize import Bounds
 from scipy.optimize import minimize
 from datetime import datetime
 import pandas as pd
-from env_var import EPIDEMIC, EXPERIMENTS
+from env_var import EPIDEMIC
 import logging
-from fetch_data import static_population_erva_age
+from forward_integration import get_model_parameters
 import os
 import time
 from multiprocessing import Pool
@@ -13,10 +13,6 @@ import datetime as dt
 
 
 def sol(u_con, mob_av, beta, beta_gh, T, pop_hat, age_er):
-    num_ervas, num_age_groups = age_er.shape
-    N_g = num_age_groups
-    N_p = num_ervas
-
     T_E = EPIDEMIC['T_E']
     T_V = EPIDEMIC['T_V']
     T_I = EPIDEMIC['T_I']
@@ -27,22 +23,19 @@ def sol(u_con, mob_av, beta, beta_gh, T, pop_hat, age_er):
     T_hr = EPIDEMIC['T_hr']
 
     # Fraction of nonhospitalized that dies
-    mu_q = EPIDEMIC['mu_q'][num_age_groups]
+    mu_q = EPIDEMIC['mu_q'][N_g]
     # Fraction of hospitalized that dies
-    mu_w = EPIDEMIC['mu_w'][num_age_groups]
+    mu_w = EPIDEMIC['mu_w'][N_g]
     # Fraction of inds. In critical care that dies
-    mu_c = EPIDEMIC['mu_c'][num_age_groups]
+    mu_c = EPIDEMIC['mu_c'][N_g]
     # Fraction of infected needing health care
-    p_H = EPIDEMIC['p_H'][num_age_groups]
+    p_H = EPIDEMIC['p_H'][N_g]
     # Fraction of hospitalized needing critical care
-    p_c = EPIDEMIC['p_c'][num_age_groups]
+    p_c = EPIDEMIC['p_c'][N_g]
     alpha = EPIDEMIC['alpha']
     e = EPIDEMIC['e']
 
-    N_t = T
-
     # Reading CSV
-    t0 = '2021-04-18'
     csv_name = 'out/epidemic_finland_9.csv'
     # Reading CSV
     epidemic_csv = pd.read_csv(csv_name)
@@ -74,14 +67,14 @@ def sol(u_con, mob_av, beta, beta_gh, T, pop_hat, age_er):
     epidemic_npy = epidemic_npy[ervas_pd_order, :]
 
     # Allocating space for compartments
-    S_g = np.zeros((N_g, N_p, N_t))
-    I_g = np.zeros((N_g, N_p, N_t))
-    E_g = np.zeros((N_g, N_p, N_t))
-    R_g = np.zeros((N_g, N_p, N_t))
-    V_g = np.zeros((N_g, N_p, N_t))
-    H_wg = np.zeros((N_g, N_p, N_t))
-    H_cg = np.zeros((N_g, N_p, N_t))
-    S_xg = np.zeros((N_g, N_p, N_t))
+    S_g = np.zeros((N_g, N_p, T))
+    I_g = np.zeros((N_g, N_p, T))
+    E_g = np.zeros((N_g, N_p, T))
+    R_g = np.zeros((N_g, N_p, T))
+    V_g = np.zeros((N_g, N_p, T))
+    H_wg = np.zeros((N_g, N_p, T))
+    H_cg = np.zeros((N_g, N_p, T))
+    S_xg = np.zeros((N_g, N_p, T))
 
     # Adding 1 dimension to age_er to do array division
     age_er_div = age_er[:, :, np.newaxis]
@@ -103,19 +96,19 @@ def sol(u_con, mob_av, beta, beta_gh, T, pop_hat, age_er):
     H_cg[:, :, 0] = epidemic_npy[:, :, 7]
 
     # Initializing the rest of compartments to zero
-    D_g = np.zeros((N_g, N_p, N_t))
-    Q_0g = np.zeros((N_g, N_p, N_t))
-    Q_1g = np.zeros((N_g, N_p, N_t))
-    H_rg = np.zeros((N_g, N_p, N_t))
-    S_vg = np.zeros((N_g, N_p, N_t))
+    D_g = np.zeros((N_g, N_p, T))
+    Q_0g = np.zeros((N_g, N_p, T))
+    Q_1g = np.zeros((N_g, N_p, T))
+    H_rg = np.zeros((N_g, N_p, T))
+    S_vg = np.zeros((N_g, N_p, T))
 
     # I store the values for the force of infection (needed for the adjoint equations)
-    L_g = np.zeros((N_g, N_p, N_t))
+    L_g = np.zeros((N_g, N_p, T))
 
     # number of hospitalizations
-    D_d = np.zeros((N_g, N_p, N_t))
+    D_d = np.zeros((N_g, N_p, T))
 
-    u = np.zeros((N_g, N_p, N_t))
+    u = np.zeros((N_g, N_p, T))
 
     p_H_ages = p_H[:, np.newaxis]
     p_c_ages = p_c[:, np.newaxis]
@@ -126,7 +119,7 @@ def sol(u_con, mob_av, beta, beta_gh, T, pop_hat, age_er):
     age_er_t = age_er.T
     mob_k_pop = mob_av/pop_hat[np.newaxis, :]
     mobility_term = mob_av@mob_k_pop.T
-    for j in range(N_t-1):
+    for j in range(T-1):
         # force of infection in equation (4)
         infect_mobility = (I_g[:, :, j]*age_er_t)@mobility_term.T
         lambda_g = beta_gh.T@infect_mobility
@@ -150,7 +143,7 @@ def sol(u_con, mob_av, beta, beta_gh, T, pop_hat, age_er):
 
         D_d[:, :, j] = T_q1*Q_1g[:, :, j]*age_er_t
 
-    D_d[:, :, N_t-1] = T_q1*Q_1g[:, :, N_t-1]*age_er_t
+    D_d[:, :, T-1] = T_q1*Q_1g[:, :, T-1]*age_er_t
 
     V_d = u*age_er_t[:, :, np.newaxis]
     V_d = V_d.sum(axis=(0, 1))
@@ -158,9 +151,7 @@ def sol(u_con, mob_av, beta, beta_gh, T, pop_hat, age_er):
     return S_g, S_vg, S_xg, L_g, D_d.sum(), V_d, u
 
 
-def back_int(Sg, Sv, Sx, Lg, nu, beta_gh, beta, T, age_er, mob_av, pop_hat):
-    num_ervas, num_age_groups = age_er.shape
-
+def back_int(S_g, S_vg, S_xg, L_g, beta_gh, beta, T, age_er, mob_av, pop_hat):
     T_E = EPIDEMIC['T_E']
     T_V = EPIDEMIC['T_V']
     T_I = EPIDEMIC['T_I']
@@ -171,36 +162,31 @@ def back_int(Sg, Sv, Sx, Lg, nu, beta_gh, beta, T, age_er, mob_av, pop_hat):
     T_hr = EPIDEMIC['T_hr']
 
     # Fraction of nonhospitalized that dies
-    mu_q = EPIDEMIC['mu_q'][num_age_groups]
+    mu_q = EPIDEMIC['mu_q'][N_g]
     # Fraction of hospitalized that dies
-    mu_w = EPIDEMIC['mu_w'][num_age_groups]
+    mu_w = EPIDEMIC['mu_w'][N_g]
     # Fraction of inds. In critical care that dies
-    mu_c = EPIDEMIC['mu_c'][num_age_groups]
+    mu_c = EPIDEMIC['mu_c'][N_g]
     # Fraction of infected needing health care
-    p_H = EPIDEMIC['p_H'][num_age_groups]
+    p_H = EPIDEMIC['p_H'][N_g]
     # Fraction of hospitalized needing critical care
-    p_c = EPIDEMIC['p_c'][num_age_groups]
+    p_c = EPIDEMIC['p_c'][N_g]
     alpha = EPIDEMIC['alpha']
     e = EPIDEMIC['e']
 
-    N_g = num_age_groups
-    N_p = num_ervas
-    N_t = T
+    lS = np.zeros((N_g, N_p, T))
+    lSv = np.zeros((N_g, N_p, T))
+    lSx = np.zeros((N_g, N_p, T))
+    lE = np.zeros((N_g, N_p, T))
+    lI = np.zeros((N_g, N_p, T))
+    lQ_0 = np.zeros((N_g, N_p, T))
+    lQ_1 = np.zeros((N_g, N_p, T))
+    lHw = np.zeros((N_g, N_p, T))
+    lHc = np.zeros((N_g, N_p, T))
+    lHr = np.zeros((N_g, N_p, T))
+    lD = np.zeros((N_g, N_p, T))
 
-    # plt.plot(time,I_all)
-    lS = np.zeros((N_g, N_p, N_t))
-    lSv = np.zeros((N_g, N_p, N_t))
-    lSx = np.zeros((N_g, N_p, N_t))
-    lE = np.zeros((N_g, N_p, N_t))
-    lI = np.zeros((N_g, N_p, N_t))
-    lQ_0 = np.zeros((N_g, N_p, N_t))
-    lQ_1 = np.zeros((N_g, N_p, N_t))
-    lHw = np.zeros((N_g, N_p, N_t))
-    lHc = np.zeros((N_g, N_p, N_t))
-    lHr = np.zeros((N_g, N_p, N_t))
-    lD = np.zeros((N_g, N_p, N_t))
-
-    dH = np.zeros((N_g, N_p, N_t))
+    dH = np.zeros((N_g, N_p, T))
 
     mob_n = mob_av/pop_hat[np.newaxis, :]
     mob_n = mob_n[:, np.newaxis, :]
@@ -216,29 +202,29 @@ def back_int(Sg, Sv, Sx, Lg, nu, beta_gh, beta, T, age_er, mob_av, pop_hat):
     mu_w_ages = mu_w[:, np.newaxis]
     mu_q_ages = mu_q[:, np.newaxis]
 
-    for i in range(N_t-1, -1, -1):
-        lS[:, :, i-1] = lS[:, :, i] - lS[:, :, i]*Lg[:, :, i] + lE[:, :, i]*Lg[:, :, i]
-        lSv[:, :, i-1] = lSv[:, :, i] - lSv[:, :, i]*(Lg[:, :, i] + T_V) + lE[:, :, i]*Lg[:, :, i]
-        lSx[:, :, i-1] = lSx[:, :, i] - lSx[:, :, i]*Lg[:, :, i] + lE[:, :, i]*Lg[:, :, i]\
+    for i in range(T-1, -1, -1):
+        lS[:, :, i-1] = lS[:, :, i] - lS[:, :, i]*L_g[:, :, i] + lE[:, :, i]*L_g[:, :, i]
+        lSv[:, :, i-1] = lSv[:, :, i] - lSv[:, :, i]*(L_g[:, :, i] + T_V) + lE[:, :, i]*L_g[:, :, i]
+        lSx[:, :, i-1] = lSx[:, :, i] - lSx[:, :, i]*L_g[:, :, i] + lE[:, :, i]*L_g[:, :, i]\
             + lSv[:, :, i]*(1-alpha*e)*T_V
 
         lE[:, :, i-1] = lE[:, :, i] - (lE[:, :, i]-lI[:, :, i])*T_E
 
-        Sg_term = Sg[:, :, i]*((lE[:, :, i] - lS[:, :, i])/age_er.T)
-        Svg_term = Sv[:, :, i]*((lE[:, :, i] - lSv[:, :, i])/age_er.T)
-        Sxg_term = Sx[:, :, i]*((lE[:, :, i] - lSx[:, :, i])/age_er.T)
+        S_g_term = S_g[:, :, i]*((lE[:, :, i] - lS[:, :, i])/age_er.T)
+        S_vg_term = S_vg[:, :, i]*((lE[:, :, i] - lSv[:, :, i])/age_er.T)
+        S_xg_term = S_xg[:, :, i]*((lE[:, :, i] - lSx[:, :, i])/age_er.T)
 
-        part_sumh = beta_term*Sg_term.T
+        part_sumh = beta_term*S_g_term.T
         part_sumh = part_sumh.transpose(0, 2, 1)
         sumh = np.einsum('ijk,lkm->iljk', part_sumh, mob_k)
         sumh = sumh.sum(axis=(2, 3))
 
-        part_sumh2 = beta_term*Svg_term.T
+        part_sumh2 = beta_term*S_vg_term.T
         part_sumh2 = part_sumh2.transpose(0, 2, 1)
         sumh2 = np.einsum('ijk,lkm->iljk', part_sumh2, mob_k)
         sumh2 = sumh2.sum(axis=(2, 3))
 
-        part_sumh3 = beta_term*Sxg_term.T
+        part_sumh3 = beta_term*S_xg_term.T
         part_sumh3 = part_sumh3.transpose(0, 2, 1)
         sumh3 = np.einsum('ijk,lkm->iljk', part_sumh3, mob_k)
         sumh3 = sumh3.sum(axis=(2, 3))
@@ -258,262 +244,113 @@ def back_int(Sg, Sv, Sx, Lg, nu, beta_gh, beta, T, age_er, mob_av, pop_hat):
 
 
 def ob_fun(x):
-    Ng = 5
-    N_p = 5
-    Nt = 110
-    nuc = np.reshape(x, (Ng, N_p, Nt))
-    nu2 = np.zeros((2, N_p, Nt))
-    nu3 = np.zeros((2, N_p, Nt))
-    nuf = np.concatenate((nu2, nuc, nu3))
-    Sg, Svg, Sxg, Lg, Dg, Vd, vac = sol(nuf, mob_av, beta, beta_gh, T, pop_erva_hat, age_er)
+    nuf = np.reshape(x, (N_g, N_p, T))
+    S_g, S_vg, S_xg, L_g, Dg, _, _ = sol(nuf, mob_av, beta, beta_gh, T, pop_hat, age_er)
 
-    l = (Dg)
-    print(l)
+    J = (Dg)
+    print(J)
 
-    J = l
     return J
 
 
 def der(x):
-    Ng = 5
-    N_p = 5
-    Nt = 110
-
-    nuc = np.reshape(x, (Ng, N_p, Nt))
-    nu2 = np.zeros((2, N_p, Nt))
-    nu3 = np.zeros((2, N_p, Nt))
-    nuf = np.concatenate((nu2, nuc, nu3))
-    Sg, Svg, Sxg, Lg, Dg, Vd, vac = sol(nuf, mob_av, beta, beta_gh, T, pop_erva_hat, age_er)
+    nuf = np.reshape(x, (N_g, N_p, T))
+    S_g, S_vg, S_xg, L_g, _, _, _ = sol(nuf, mob_av, beta, beta_gh, T, pop_hat, age_er)
     # calculation of the gradient
-    dH = back_int(Sg, Svg, Sxg, Lg, u, beta_gh, beta, T, age_er, mob_av, pop_erva_hat, 2)
+    dH = back_int(S_g, S_vg, S_xg, L_g, beta_gh, beta, T, age_er, mob_av, pop_hat)
 
-    dH2 = np.reshape(dH, (Ng*N_p*Nt))
+    dH2 = np.reshape(dH, (N_g*N_p*T))
 
     return dH2
 
 
 def bound_f(bound_full, T_i, u_op, kg_pairs):
-    Ng = 5
-    N_p = 5
-    T = 110
     T_old = T_i
     T_temp = T_i
-    bound_r = np.reshape(bound_full, (Ng, N_p, T))
-    Sg, Svg, Sxg, Lg, Dg, Vd, vac = sol(u_op, mob_av, beta, beta_gh, T, pop_erva_hat, age_er)
+    bound_r = np.reshape(bound_full, (N_g, N_p, T))
+    S_g, S_vg, S_xg, L_g, _, _, _ = sol(u_op, mob_av, beta, beta_gh, T, pop_hat, age_er)
+
     Var = False
     for i in range(T_i+1, T):
-        for g in range(Ng-1, -1, -1):
+        for g in range(N_g-1, -1, -1):
             for k in range(N_p):
-                if Sg[g+2, k, i] == 0:
+                if S_g[g, k, i] <= 0:
                     if (g, k) not in kg_pairs:
                         T_i = i
                         print(T_i, g, k)
-                        bound_r[g, k, i-1] = Sg[g+2, k, i-1] - Lg[g+2, k, i-1]*Sg[g+2, k, i-1]
+                        bound_r[g, k, i-1] = S_g[g, k, i-1] - L_g[g, k, i-1]*S_g[g, k, i-1]
                         bound_r[g, k, i:T] = 0.0
                         T_temp = i
                         kg_pairs.append((g, k))
                         Var = True
+
         if Var:
             break
 
-    bound_rf = np.reshape(bound_r, Ng*N_p*T)
+    bound_rf = np.reshape(bound_r, N_g*N_p*T)
 
     return bound_rf, T_i, kg_pairs
 
 
-def optimize(filename, beta_sim=0.03559801015581483, r=1.0, death_optim_in=False):
+def optimize(filename, num_age_groups, num_regions, time_horizon, init_time,
+             beta_sim=0.03559801015581483, tau=0.5):
     global beta
     beta = beta_sim
 
-    global death_optim
-    death_optim = death_optim_in
-    r = r
+    global mob_av, beta_gh, pop_hat, age_er
+    mob_av, beta_gh, pop_hat, age_er, rho = get_model_parameters(
+                                                number_age_groups=num_age_groups,
+                                                num_regions=num_regions,
+                                                init_vacc=True,
+                                                t0=init_time,
+                                                tau=tau
+                                            )
 
-    # contact matrix
-    num_ervas = EXPERIMENTS['num_ervas']
-    number_age_groups = EXPERIMENTS['num_age_groups']
+    global t0
+    t0 = init_time
 
-    c_gh_3 = EPIDEMIC['contact_matrix'][number_age_groups]
+    global N_g
+    N_g = N_g
 
-    logger = logging.getLogger()
-    dir_path = os.path.dirname(os.path.realpath(__file__))
-    csv_name = 'erva_population_age_2020.csv'
-    erva_pop_file = os.path.join(dir_path, 'stats', csv_name)
-    pop_ervas_age, _ = static_population_erva_age(logger, erva_pop_file,
-                                                  number_age_groups=number_age_groups)
-    pop_ervas_age = pop_ervas_age[~pop_ervas_age['erva'].str.contains('All')]
-    pop_ervas_age = pop_ervas_age[~pop_ervas_age['erva'].str.contains('land')]
-    pop_ervas_age = pop_ervas_age.sort_values(['erva', 'age_group'])
-    pop_ervas_npy = pop_ervas_age['Total'].values
-    pop_ervas_npy = pop_ervas_npy.reshape(num_ervas, number_age_groups)
+    global N_p
+    N_p = num_regions
 
-    ervas_order = EPIDEMIC['ervas_order']
-
-    ervas_df = list(pd.unique(pop_ervas_age['erva']))
-    ervas_pd_order = [ervas_df.index(erva) for erva in ervas_order]
-    # age structure in each erva
-    global age_er
-    age_er = pop_ervas_npy[ervas_pd_order, :]
-
-    global pop_erva
-    pop_erva = age_er.sum(axis=1)
-
-    # mobility matrix
-    m_av = EPIDEMIC['mobility_matrix'][num_ervas]
-
-    m_av = m_av/pop_erva[:, np.newaxis]
-
-    N_p = num_ervas
-    Ng = number_age_groups
-
-    global mob_av
-    mob_av = np.zeros((N_p, N_p))
-
-    print('tau = %s' % (r, ))
-    for k in range(N_p):
-        for m in range(N_p):
-            if k == m:
-                mob_av[k, m] = (1.-r) + r*m_av[k, m]
-            else:
-                mob_av[k, m] = r*m_av[k, m]
-
-    ####################################################################
-    # equation (3) in overleaf (change in population size because of mobility) N_hat_{lg}, N_hat_{l}
-    global pop_erva_hat
-    pop_erva_hat = np.zeros(N_p)
-    age_er_hat = np.zeros((Ng, N_p))
-
-    for m in range(N_p):
-        m_k = 0.0
-        for k in range(N_p):
-            m_k = m_k + pop_erva[k]*mob_av[k, m]
-            for g in range(Ng):
-                age_er_hat[g, m] = sum(age_er[:, g]*mob_av[:, m])
-
-        pop_erva_hat[m] = m_k
-
-    age_pop = sum(age_er)
-    global beta_gh
-    beta_gh = np.zeros((Ng, Ng))
-
-    for g in range(Ng):
-        for h in range(Ng):
-            if g == h:
-                for m in range(N_p):
-                    sum_kg2 = 0.0
-                    for k in range(N_p):
-                        sum_kg2 = sum_kg2 + age_er[k, g]*mob_av[k, m]*mob_av[k, m]/pop_erva_hat[m]
-                sum_kg = sum(age_er_hat[g, :]*age_er_hat[h, :]/pop_erva_hat)
-                beta_gh[g, h] = age_pop[g]*c_gh_3[g, h]/(sum_kg-sum_kg2)
-            else:
-                sum_kg = age_er_hat[g, :]*age_er_hat[h, :]
-                beta_gh[g, h] = age_pop[g]*c_gh_3[g, h]/(sum(sum_kg/pop_erva_hat))
-
-    ######################################################################################
-    N_p = num_ervas
-    Ng = number_age_groups
-    # number of optimization variables
-    N_f = (Ng-4)*N_p
     global T
-    T = 110
+    T = time_horizon
+
+    # number of optimization variables
+    N_f = N_g*N_p
 
     # transmission parameter
     global u
-    u = np.zeros((Ng, N_p, T))
-    time = np.arange(0, T)
+    u = np.zeros((N_g, N_p, T))
     n_max = 30000
 
-    # constraints
-    a1 = np.eye(T)*age_er[0, 2]
-    a2 = np.eye(T)*age_er[1, 2]
-    a3 = np.eye(T)*age_er[2, 2]
-    a4 = np.eye(T)*age_er[3, 2]
-    a5 = np.eye(T)*age_er[4, 2]
-
-    b1 = np.eye(T)*age_er[0, 3]
-    b2 = np.eye(T)*age_er[1, 3]
-    b3 = np.eye(T)*age_er[2, 3]
-    b4 = np.eye(T)*age_er[3, 3]
-    b5 = np.eye(T)*age_er[4, 3]
-
-    c0 = np.eye(T)*age_er[0, 4]
-    c01 = np.eye(T)*age_er[1, 4]
-    c02 = np.eye(T)*age_er[2, 4]
-    c03 = np.eye(T)*age_er[3, 4]
-    c04 = np.eye(T)*age_er[4, 4]
-
-    c1 = np.eye(T)*age_er[0, 5]
-    c2 = np.eye(T)*age_er[1, 5]
-    c3 = np.eye(T)*age_er[2, 5]
-    c4 = np.eye(T)*age_er[3, 5]
-    c5 = np.eye(T)*age_er[4, 5]
-
-    c6 = np.eye(T)*age_er[0, 6]
-    c7 = np.eye(T)*age_er[1, 6]
-    c8 = np.eye(T)*age_er[2, 6]
-    c9 = np.eye(T)*age_er[3, 6]
-    c10 = np.eye(T)*age_er[4, 6]
-
-    Af = np.concatenate((a1, a2, a3, a4, a5,
-                         b1, b2, b3, b4, b5,
-                         c0, c01, c02, c03, c04,
-                         c1, c2, c3, c4, c5, c6, c7, c8, c9, c10), axis=1)
-
-    print(np.shape(Af))
-    print(T*N_f)
+    # Constraints
+    Af = np.array([]).reshape(T, 0)
+    for g in range(N_g):
+        for k in range(N_p):
+            kg_eye = np.eye(T)*age_er[k, g]
+            Af = np.hstack((Af, kg_eye))
 
     b = n_max*np.ones(T)
-    print('first')
 
-    cons = {
-            "type": "eq", "fun": lambda x:  Af @ x - b,
-            'jac': lambda x: Af
-    }
+    cons = {"type": "eq", "fun": lambda x:  Af @ x - b,
+            'jac': lambda x: Af}
 
-    # bounds for minimum and maximum value for the optimization variable
-    bound0 = np.zeros(T*N_f)
-
-    now = datetime.now()
-    current_time = now.strftime("%H:%M:%S")
-    print("Current Time =", current_time)
-
-    x0 = np.zeros(N_f*T)
     bound0 = np.zeros(N_f*T)
-
-    bound1 = np.zeros(T*N_f)
-    ########check this again
-    bound1[0:T] = n_max/age_er[0, 2]
-    bound1[T:2*T] = n_max/age_er[1, 2]
-    bound1[2*T:3*T] = n_max/age_er[2, 2]
-    bound1[3*T:4*T] = n_max/age_er[3, 2]
-    bound1[4*T:5*T] = n_max/age_er[4, 2]
-
-    bound1[5*T:6*T] = n_max/age_er[0, 3]
-    bound1[6*T:7*T] = n_max/age_er[1, 3]
-    bound1[7*T:8*T] = n_max/age_er[2, 3]
-    bound1[8*T:9*T] = n_max/age_er[3, 3]
-    bound1[9*T:10*T] = n_max/age_er[4, 3]
-
-    bound1[10*T:11*T] = n_max/age_er[0, 4]
-    bound1[11*T:12*T] = n_max/age_er[1, 4]
-    bound1[12*T:13*T] = n_max/age_er[2, 4]
-    bound1[13*T:14*T] = n_max/age_er[3, 4]
-    bound1[14*T:15*T] = n_max/age_er[4, 4]
-
-    bound1[15*T:16*T] = n_max/age_er[0, 5]
-    bound1[16*T:17*T] = n_max/age_er[1, 5]
-    bound1[17*T:18*T] = n_max/age_er[2, 5]
-    bound1[18*T:19*T] = n_max/age_er[3, 5]
-    bound1[19*T:20*T] = n_max/age_er[4, 5]
-
-    bound1[20*T:21*T] = n_max/age_er[0, 6]
-    bound1[21*T:22*T] = n_max/age_er[1, 6]
-    bound1[22*T:23*T] = n_max/age_er[2, 6]
-    bound1[23*T:24*T] = n_max/age_er[3, 6]
-    bound1[24*T:25*T] = n_max/age_er[4, 6]
+    bound1 = np.zeros(N_f*T)
+    idx_t = 0
+    for g in range(N_g):
+        for k in range(N_p):
+            low_idx = int(idx_t*T)
+            up_idx = int((idx_t+1)*T)
+            bound1[low_idx:up_idx] = n_max/age_er[k, g]
+            idx_t += 1
 
     bounds = Bounds(bound0, bound1)
 
+    x0 = np.zeros(N_f*T)
     res = minimize(ob_fun, x0, method='SLSQP', jac=der,
                    constraints=[cons], options={'maxiter': 5, 'disp': True},
                    bounds=bounds)
@@ -522,64 +359,68 @@ def optimize(filename, beta_sim=0.03559801015581483, r=1.0, death_optim_in=False
     current_time = now.strftime("%H:%M:%S")
     print("Current Time =", current_time)
 
-    opc_o = np.reshape(res.x, (5, N_p, T))
-    nu2_o = np.zeros((2, N_p, T))
-    nu3_o = np.zeros((2, N_p, T))
-    nuf_o = np.concatenate((nu2_o, opc_o, nu3_o))
+    nuf_o = np.reshape(res.x, (N_g, N_p, T))
     u_old = nuf_o
 
     T_old = 0
     bound_old = bound1
 
     old_kg_pairs = []
-    for i in range(24):
+    for i in range(12):
         bound_new, T_new, new_kg_pairs = bound_f(bound_old, T_old, u_old, old_kg_pairs)
         bound_old = bound_new
         T_old = T_new
         old_kg_pairs = new_kg_pairs
-        if len(new_kg_pairs) >= 24:
+        if len(new_kg_pairs) >= 12:
             nuf = u_old
+            # Needs change for saving the solution
+            np.save("inc.sol0_tau0.5.npy", nuf)
+            # Here you also need to save the new_kg_pairs because we will initialize the list for the 5 age group file with these pairs
             break
         bounds = Bounds(bound0, bound_new)
 
         res = minimize(ob_fun, x0, method='SLSQP', jac=der,
-                       constraints=[cons], options={'maxiter': 3, 'disp': True},
+                       constraints=[cons], options={'maxiter': 5, 'disp': True},
                        bounds=bounds)
 
-        opc = np.reshape(res.x, (5, N_p, T))
-        nu2 = np.zeros((2, N_p, T))
-        nu3 = np.zeros((2, N_p, T))
-        nuf = np.concatenate((nu2, opc, nu3))
+        nuf = np.reshape(res.x, (N_g, N_p, T))
         u_old = nuf
+
+    # Again needs change for saving the solution
+    np.save("inc.sol0_tau0.5.npy", nuf)
 
     now = datetime.now()
 
     current_time = now.strftime("%H:%M:%S")
     print("Current Time =", current_time)
+
     np.save(filename, nuf)
     print('File written to: %s' % (filename, ))
 
 
-def run_optimize(r, beta_sim, tau, death_optim_in):
-    filename = "R_%s_op_sol_tau%s.npy" % (r, tau, death_optim_in)
+def run_optimize(r, tau, beta_sim, time_horizon):
+    filename = "R_%s_tau_%s_T_%s.npy" % (r, tau, time_horizon)
     try:
         start_time = time.time()
         proc_number = os.getpid()
-        print('Starting (%s). R: %s. Tau: %s. Death optim: %s' % (proc_number, r,
-                                                                  tau, death_optim_in))
+        print('Starting (%s). R: %s. Tau: %s' % (proc_number, r, tau, time_horizon))
 
         dir_path = os.path.dirname(os.path.realpath(__file__))
         file_path = os.path.join(dir_path, 'out', filename)
-        optimize(beta_sim=beta_sim, r=tau, filename=file_path,
-                 death_optim_in=death_optim_in)
+        optimize(beta_sim=beta_sim,
+                 tau=tau,
+                 filename=file_path,
+                 time_horizon=time_horizon,
+                 num_age_groups=9,
+                 num_regions=5)
 
         elapsed_time = time.time() - start_time
         elapsed_delta = dt.timedelta(seconds=elapsed_time)
-        print('Finished (%s). R: %s. Tau: %s. Death optim: %s. Time: %s' % (proc_number,
-                                                                            r,
-                                                                            tau,
-                                                                            death_optim_in,
-                                                                            elapsed_delta))
+        print('Finished (%s). R: %s. Tau: %s. T: %s. Time: %s' % (proc_number,
+                                                                  r,
+                                                                  tau,
+                                                                  time_horizon,
+                                                                  elapsed_delta))
         return filename
     except Exception:
         logger = logging.getLogger()
@@ -596,19 +437,22 @@ def run_optimize(r, beta_sim, tau, death_optim_in):
 
 
 def run_parallel_optimizations():
+    # all_experiments = [
+    #     (0.75,  0.,  0.016577192790495632),
+    #     (0.75,  0.5,  0.017420081058752156),
+    #     (0.75,  1.0,  0.017799005077907416),
+    #     (1.0,  0.,  0.022102923720660844),
+    #     (1.0,  0.5,  0.023226774745002877),
+    #     (1.0,  1.0,  0.023732006770543223),
+    #     (1.25,  0.,  0.027628654650826055),
+    #     (1.25,  0.5,  0.029033468431253595),
+    #     (1.25,  1.0,  0.02966500846317903),
+    #     (1.5,  0.,  0.033154385580991264),
+    #     (1.5,  0.5,  0.03484016211750431),
+    #     (1.5,  1.0,  0.03559801015581483),
+    # ]
     all_experiments = [
-        (0.75,  0.,  0.016577192790495632, False),
-        (0.75,  0.5,  0.017420081058752156, False),
-        (0.75,  1.0,  0.017799005077907416, False),
-        (1.0,  0.,  0.022102923720660844, False),
-        (1.0,  0.5,  0.023226774745002877, False),
-        (1.0,  1.0,  0.023732006770543223, False),
-        (1.25,  0.,  0.027628654650826055, False),
-        (1.25,  0.5,  0.029033468431253595, False),
-        (1.25,  1.0,  0.02966500846317903, False),
-        (1.5,  0.,  0.033154385580991264, False),
-        (1.5,  0.5,  0.03484016211750431, False),
-        (1.5,  1.0,  0.03559801015581483, False),
+        (1.5,  0.5,  0.03484016211750431, 115, '2021-04-18'),
     ]
     num_cpus = os.cpu_count()
     start_time = time.time()
@@ -616,10 +460,10 @@ def run_parallel_optimizations():
     result_filenames = []
     print('Running %s experiments with %s CPUS.' % (num_experiments, num_cpus))
     with Pool(processes=num_cpus) as pool:
-        # Calling the function to execute forward simulation in asynchronous way
+        # Calling the function to execute simulations in asynchronous way
         async_res = [pool.apply_async(func=run_optimize,
-                                      args=(r, beta_sim, tau, death_optim_in))
-                     for r, tau, beta_sim, death_optim_in in all_experiments]
+                                      args=(r, tau, beta_sim, time_horizon, init_time))
+                     for r, tau, beta_sim, time_horizon, init_time in all_experiments]
 
         # Waiting for the values of the async execution
         for res in async_res:

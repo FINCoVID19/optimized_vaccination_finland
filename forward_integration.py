@@ -12,8 +12,8 @@ def forward_integration(u_con, c1, beta, c_gh, T, pop_hat, age_er,
                         t0, ws_vacc, e, epidemic_npy, init_vacc, checks=False,
                         u_op_file=None):
     # number of age groups and ervas
-    num_ervas, num_age_groups = age_er.shape
-    N_p = num_ervas
+    num_regions, num_age_groups = age_er.shape
+    N_p = num_regions
     N_g = num_age_groups
     N_t = T
 
@@ -240,8 +240,8 @@ def forward_integration(u_con, c1, beta, c_gh, T, pop_hat, age_er,
 
 
 def read_initial_values(age_er, init_vacc, t0):
-    num_ervas, num_age_groups = age_er.shape
-    N_p = num_ervas
+    num_regions, num_age_groups = age_er.shape
+    N_p = num_regions
     N_g = num_age_groups
 
     if init_vacc:
@@ -284,14 +284,14 @@ def read_initial_values(age_er, init_vacc, t0):
     # Dividing to get the proportion
     epidemic_npy = epidemic_npy/age_er_div
 
-    # epidemic_npy has num_ervas first, compartmetns have age first
+    # epidemic_npy has num_regions first, compartmetns have age first
     # Transposing to epidemic_npy to accomodate to compartments
     epidemic_npy = epidemic_npy.transpose(1, 0, 2)
 
     return epidemic_npy
 
 
-def get_model_parameters(number_age_groups, num_ervas, init_vacc, t0, tau):
+def get_model_parameters(number_age_groups, num_regions, init_vacc, t0, tau):
     logger = logging.getLogger()
     pop_file = 'stats/erva_population_age_2020.csv'
     pop_regions_age, _ = static_population_erva_age(logger, pop_file,
@@ -300,7 +300,7 @@ def get_model_parameters(number_age_groups, num_ervas, init_vacc, t0, tau):
     pop_regions_age = pop_regions_age[~pop_regions_age['erva'].str.contains('land')]
     pop_regions_age = pop_regions_age.sort_values(['erva', 'age_group'])
     pop_regions_npy = pop_regions_age['Total'].values
-    pop_regions_npy = pop_regions_npy.reshape(num_ervas, number_age_groups)
+    pop_regions_npy = pop_regions_npy.reshape(num_regions, number_age_groups)
 
     ervas_order = EPIDEMIC['ervas_order']
 
@@ -332,11 +332,11 @@ def get_model_parameters(number_age_groups, num_ervas, init_vacc, t0, tau):
     # Converting to numpy
     epidemic_npy = epidemic_zero.values
     # Reshaping to 3d array
-    epidemic_npy = epidemic_npy.reshape(num_ervas, number_age_groups, len(select_columns))
+    epidemic_npy = epidemic_npy.reshape(num_regions, number_age_groups, len(select_columns))
     epidemic_npy = epidemic_npy.astype(np.float64)
     epidemic_sus = epidemic_npy.sum(axis=2)
 
-    epidemic_sus = epidemic_sus.reshape(num_ervas, number_age_groups)
+    epidemic_sus = epidemic_sus.reshape(num_regions, number_age_groups)
 
     # Rearranging the order of the matrix with correct order
     epidemic_sus = epidemic_sus[ervas_pd_order, :]
@@ -348,12 +348,12 @@ def get_model_parameters(number_age_groups, num_ervas, init_vacc, t0, tau):
     c_gh_3 = EPIDEMIC['contact_matrix'][number_age_groups]
 
     # Mobility matrix
-    m_av = EPIDEMIC['mobility_matrix'][num_ervas]
+    m_av = EPIDEMIC['mobility_matrix'][num_regions]
 
     m_av = m_av/pop_region[:, np.newaxis]
 
     # theta_km
-    N_p = num_ervas
+    N_p = num_regions
     N_g = number_age_groups
     mob_av = np.zeros((N_p, N_p))
     for k in range(N_p):
@@ -398,7 +398,7 @@ def get_model_parameters(number_age_groups, num_ervas, init_vacc, t0, tau):
 
     # Computing NGM and rho
     T_I = EPIDEMIC['T_I']**(-1)
-    ks = num_ervas
+    ks = num_regions
     gs = number_age_groups
     kg = ks*gs
     next_gen_matrix = np.zeros((kg, kg))
