@@ -158,7 +158,7 @@ def sol(u_con, mob_av, beta, beta_gh, T, pop_hat, age_er):
     return S_g, S_vg, S_xg, L_g, D_d.sum(), V_d, u
 
 
-def back_int(Sg, Sv, Sx, Lg, nu, c_hg, beta, T, age_er, mob, pop_erva, ind):
+def back_int(Sg, Sv, Sx, Lg, nu, c_hg, beta, T, age_er, mob, pop_hat, ind):
     num_ervas, num_age_groups = age_er.shape
 
     T_E = EPIDEMIC['T_E']
@@ -210,16 +210,26 @@ def back_int(Sg, Sv, Sx, Lg, nu, c_hg, beta, T, age_er, mob, pop_erva, ind):
                     + lSv[g,n,i]*(1.-alpha*e)*T_V 
 
                 lE[g,n,i-1] = lE[g,n,i] - (lE[g,n,i]-lI[g,n,i])*T_E
-                sumh = 0.0 
-                sumh2 = 0.0
-                sumh3 = 0.0
-                for h in range(N_g):
-                    for k in range(N_p):
-                        for m in range(N_p):
-                            mob_k = mob[k,m]*mob[n,m]/pop_erva[m]
-                            sumh = sumh  + beta*c_hg[g+ind,h+ind]*Sg[h+ind,k,i]*mob_k*(lE[h,k,i] - lS[h,k,i])/age_er[k,h+ind]
-                            sumh2 = sumh2  + beta*c_hg[g+ind,h+ind]*Sv[h+ind,k,i]*mob_k*(lE[h,k,i] - lSv[h,k,i])/age_er[k,h+ind]
-                            sumh3 = sumh  + beta*c_hg[g+ind,h+ind]*Sx[h+ind,k,i]*mob_k*(lE[h,k,i] - lSx[h,k,i])/age_er[k,h+ind]
+
+                beta_term = beta*beta_gh[g, :]
+                beta_term = beta_term[:, np.newaxis]
+
+                mob_n = mob_av[n, :]/pop_hat
+                mob_n = mob_n[np.newaxis, :]
+                mob_k = mob_n*mob_av
+
+                Sg_term = Sg[:, :, i]*((lE[:, :, i] - lS[:, :, i])/age_er.T)
+                Svg_term = Sv[:, :, i]*((lE[:, :, i] - lSv[:, :, i])/age_er.T)
+                Sxg_term = Sx[:, :, i]*((lE[:, :, i] - lSx[:, :, i])/age_er.T)
+
+                sumh = beta_term*Sg_term@mob_k
+                sumh = np.sum(sumh)
+
+                sumh2 = beta_term*Svg_term@mob_k
+                sumh2 = np.sum(sumh2)
+
+                sumh3 = beta_term*Sxg_term@mob_k
+                sumh3 = np.sum(sumh3)
 
                 lI[g,n,i-1] = lI[g,n,i] - T_I*lI[g,n,i] +sumh+ sumh2 + sumh3 + lQ_0[g,n,i]*(1.-p_H[g+ind])*T_I \
                     +lQ_1[g,n,i]*p_H[g+ind]*T_I 
