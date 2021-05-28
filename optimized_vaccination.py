@@ -1,15 +1,15 @@
+import os
+import time
+import datetime
+import logging
+import json
+from multiprocessing import Pool
 import numpy as np
 from scipy.optimize import Bounds
 from scipy.optimize import minimize
-from datetime import datetime
 import pandas as pd
 from env_var import EPIDEMIC
-import logging
 from forward_integration import get_model_parameters
-import os
-import time
-from multiprocessing import Pool
-import datetime as dt
 
 
 def sol(u_con, mob_av, beta, beta_gh, T, pop_hat, age_er):
@@ -248,7 +248,7 @@ def ob_fun(x):
     S_g, S_vg, S_xg, L_g, Dg, _, _ = sol(nuf, mob_av, beta, beta_gh, T, pop_hat, age_er)
 
     J = (Dg)
-    print(J)
+    print('Obj function: %s' % (J, ))
 
     return J
 
@@ -265,12 +265,10 @@ def der(x):
 
 
 def bound_f(bound_full, T_i, u_op, kg_pairs):
-    T_old = T_i
-    T_temp = T_i
     bound_r = np.reshape(bound_full, (N_g, N_p, T))
     S_g, S_vg, S_xg, L_g, _, _, _ = sol(u_op, mob_av, beta, beta_gh, T, pop_hat, age_er)
 
-    Var = False
+    break_time = False
     for i in range(T_i+1, T):
         for g in range(N_g-1, -1, -1):
             for k in range(N_p):
@@ -280,11 +278,10 @@ def bound_f(bound_full, T_i, u_op, kg_pairs):
                         print(T_i, g, k)
                         bound_r[g, k, i-1] = S_g[g, k, i-1] - L_g[g, k, i-1]*S_g[g, k, i-1]
                         bound_r[g, k, i:T] = 0.0
-                        T_temp = i
                         kg_pairs.append((g, k))
-                        Var = True
+                        break_time = True
 
-        if Var:
+        if break_time:
             break
 
     bound_rf = np.reshape(bound_r, N_g*N_p*T)
@@ -297,6 +294,7 @@ def optimize(filename, num_age_groups, num_regions, time_horizon, init_time,
     global beta
     beta = beta_sim
 
+    start_params = time.time()
     global mob_av, beta_gh, pop_hat, age_er
     mob_av, beta_gh, pop_hat, age_er, rho = get_model_parameters(
                                                 number_age_groups=num_age_groups,
@@ -306,11 +304,16 @@ def optimize(filename, num_age_groups, num_regions, time_horizon, init_time,
                                                 tau=tau
                                             )
 
+    elapsed_time = time.time() - start_params
+    elapsed_delta = datetime.timedelta(seconds=elapsed_time)
+    print('Got model parameters. Elapsed: %s' % (elapsed_delta, ))
+
+    start_bounds = time.time()
     global t0
     t0 = init_time
 
     global N_g
-    N_g = N_g
+    N_g = num_age_groups
 
     global N_p
     N_p = num_regions
@@ -350,35 +353,36 @@ def optimize(filename, num_age_groups, num_regions, time_horizon, init_time,
 
     bounds = Bounds(bound0, bound1)
 
+    elapsed_time = time.time() - start_bounds
+    elapsed_delta = datetime.timedelta(seconds=elapsed_time)
+    print('Constructed bounds. Elapsed: %s' % (elapsed_delta, ))
+
+    start_first = time.time()
     x0 = np.zeros(N_f*T)
     res = minimize(ob_fun, x0, method='SLSQP', jac=der,
                    constraints=[cons], options={'maxiter': 5, 'disp': True},
                    bounds=bounds)
-
-    now = datetime.now()
-    current_time = now.strftime("%H:%M:%S")
-    print("Current Time =", current_time)
+    elapsed_time = time.time() - start_first
+    elapsed_delta = datetime.timedelta(seconds=elapsed_time)
+    print('Finished first optim. Elapsed: %s' % (elapsed_delta, ))
 
     nuf_o = np.reshape(res.x, (N_g, N_p, T))
     u_old = nuf_o
-
     T_old = 0
     bound_old = bound1
-
     old_kg_pairs = []
     for i in range(12):
+        start_sim = time.time()
+
         bound_new, T_new, new_kg_pairs = bound_f(bound_old, T_old, u_old, old_kg_pairs)
         bound_old = bound_new
         T_old = T_new
         old_kg_pairs = new_kg_pairs
         if len(new_kg_pairs) >= 12:
             nuf = u_old
-            # Needs change for saving the solution
-            np.save("inc.sol0_tau0.5.npy", nuf)
-            # Here you also need to save the new_kg_pairs because we will initialize the list for the 5 age group file with these pairs
             break
-        bounds = Bounds(bound0, bound_new)
 
+        bounds = Bounds(bound0, bound_new)
         res = minimize(ob_fun, x0, method='SLSQP', jac=der,
                        constraints=[cons], options={'maxiter': 5, 'disp': True},
                        bounds=bounds)
@@ -386,24 +390,39 @@ def optimize(filename, num_age_groups, num_regions, time_horizon, init_time,
         nuf = np.reshape(res.x, (N_g, N_p, T))
         u_old = nuf
 
-    # Again needs change for saving the solution
-    np.save("inc.sol0_tau0.5.npy", nuf)
+        print('old_kg_pairs: %s' % (old_kg_pairs, ))
+        elapsed_time = time.time() - start_sim
+        elapsed_delta = datetime.timedelta(seconds=elapsed_time)
+        print('Finished simulation %s. Elapsed: %s' % (i+1, elapsed_delta))
 
-    now = datetime.now()
+    json_save = {
+        'old_kg_pairs': old_kg_pairs
+    }
 
-    current_time = now.strftime("%H:%M:%S")
-    print("Current Time =", current_time)
+    # Save old_kg_pairs
+    base_name = os.path.basename(filename)
+    base_name = base_name.split('.')[0]
+    folder_path_lst = filename.split('/')[:-1]
+    folder_path = '/'.join(folder_path_lst)
+    json_filename = base_name + '.json'
+    json_filepath = os.path.join(folder_path, json_filename)
+    with open(json_filepath, 'w', encoding='utf-8') as f:
+        json.dump(json_save, f, indent=2)
 
     np.save(filename, nuf)
-    print('File written to: %s' % (filename, ))
+    print('File written to: %s and %s' % (filename, json_filepath))
 
 
-def run_optimize(r, tau, beta_sim, time_horizon):
+def run_optimize(r, tau, beta_sim, time_horizon, init_time):
     filename = "R_%s_tau_%s_T_%s.npy" % (r, tau, time_horizon)
     try:
         start_time = time.time()
         proc_number = os.getpid()
-        print('Starting (%s). R: %s. Tau: %s' % (proc_number, r, tau, time_horizon))
+        print('Starting (%s). R: %s. Tau: %s. T: %s. T0: %s' % (proc_number,
+                                                                r,
+                                                                tau,
+                                                                time_horizon,
+                                                                init_time))
 
         dir_path = os.path.dirname(os.path.realpath(__file__))
         file_path = os.path.join(dir_path, 'out', filename)
@@ -411,16 +430,19 @@ def run_optimize(r, tau, beta_sim, time_horizon):
                  tau=tau,
                  filename=file_path,
                  time_horizon=time_horizon,
+                 init_time=init_time,
                  num_age_groups=9,
                  num_regions=5)
 
         elapsed_time = time.time() - start_time
-        elapsed_delta = dt.timedelta(seconds=elapsed_time)
-        print('Finished (%s). R: %s. Tau: %s. T: %s. Time: %s' % (proc_number,
-                                                                  r,
-                                                                  tau,
-                                                                  time_horizon,
-                                                                  elapsed_delta))
+        elapsed_delta = datetime.timedelta(seconds=elapsed_time)
+        print('Finished (%s). R: %s. Tau: %s. T: %s. T0: %s. Time: %s' % (proc_number,
+                                                                          r,
+                                                                          tau,
+                                                                          time_horizon,
+                                                                          init_time,
+                                                                          elapsed_delta))
+
         return filename
     except Exception:
         logger = logging.getLogger()
@@ -470,7 +492,7 @@ def run_parallel_optimizations():
             filename = res.get()
             result_filenames.append(filename)
     elapsed_time = time.time() - start_time
-    elapsed_delta = dt.timedelta(seconds=elapsed_time)
+    elapsed_delta = datetime.timedelta(seconds=elapsed_time)
     print('Finished experiments. Elapsed: %s' % (elapsed_delta, ))
     print('Resulting filenames: %s' % (result_filenames, ))
 
