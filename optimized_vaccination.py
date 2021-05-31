@@ -325,6 +325,7 @@ def optimize(epidemic_npy_complete):
     bounds = init_bounds
     last_value = np.inf
     while True:
+        start_iter = time.time()
         print(('Starting minimize %d iteration.\n'
                'KG pairs: %s') % (minimize_iter, kg_pairs))
         res = minimize(ob_fun, u_op, method='SLSQP', jac=der,
@@ -336,9 +337,13 @@ def optimize(epidemic_npy_complete):
         bound_full, kg_pairs, D_g = bound_f(bound_full_orig, u_op)
         bounds = Bounds(bound0, bound_full)
 
+        elapsed_time = time.time() - start_iter
+        elapsed_delta = datetime.timedelta(seconds=elapsed_time)
         print(('Finished minimize %d iteration.\n'
+               'Elapsed time: %s\n'
                'Last D_g value: %s\n'
-               'Current D_g value: %s') % (minimize_iter, last_value, D_g))
+               'Current D_g value: %s') % (minimize_iter, elapsed_delta,
+                                           last_value, D_g))
         minimize_iter += 1
 
         if np.isclose(last_value, D_g):
