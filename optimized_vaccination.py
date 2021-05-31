@@ -247,9 +247,9 @@ def ob_fun(x):
     start_obj = time.time()
 
     nuf = np.reshape(x, (N_g, N_p, T))
-    S_g, S_vg, S_xg, L_g, Dg, _, _ = sol(nuf, mob_av, beta, beta_gh, T, pop_hat, age_er)
+    S_g, S_vg, S_xg, L_g, D_g, _, _ = sol(nuf, mob_av, beta, beta_gh, T, pop_hat, age_er)
 
-    J = (Dg)
+    J = (D_g)
 
     elapsed_time = time.time() - start_obj
     elapsed_delta = datetime.timedelta(seconds=elapsed_time)
@@ -275,29 +275,23 @@ def der(x):
     return dH2
 
 
-def bound_f(bound_full, u_op, kg_pairs):
-    bound_r = np.reshape(bound_full, (N_g, N_p, T))
-    S_g, S_vg, S_xg, L_g, _, _, _ = sol(u_op, mob_av, beta, beta_gh, T, pop_hat, age_er)
+def bound_f(bound_full_orig, u_op):
+    bound_r = np.reshape(bound_full_orig, (N_g, N_p, T))
+    S_g, S_vg, S_xg, L_g, D_g, _, _ = sol(u_op, mob_av, beta, beta_gh, T, pop_hat, age_er)
 
-    break_time = False
+    kg_pairs = []
     for i in range(T):
         for g in range(N_g-1, -1, -1):
             for k in range(N_p):
                 if S_g[g, k, i] <= 0:
-                    if (g, k) not in kg_pairs:
-                        T_i = i
-                        print('Found KG pair %s at time %s' % ((g, k), T_i))
-                        bound_r[g, k, i-1] = S_g[g, k, i-1] - L_g[g, k, i-1]*S_g[g, k, i-1]
-                        bound_r[g, k, i:T] = 0.0
-                        kg_pairs.append((g, k))
-                        break_time = True
-
-        if break_time:
-            break
+                    print('Found KG pair %s at time %s' % ((g, k), i))
+                    bound_r[g, k, i-1] = S_g[g, k, i-1] - L_g[g, k, i-1]*S_g[g, k, i-1]
+                    bound_r[g, k, i:T] = 0.0
+                    kg_pairs.append((g, k))
 
     bound_rf = np.reshape(bound_r, N_g*N_p*T)
 
-    return bound_rf, kg_pairs
+    return bound_rf, kg_pairs, D_g
 
 
 def optimize(filename, num_age_groups, num_regions, time_horizon, init_time,
@@ -349,16 +343,16 @@ def optimize(filename, num_age_groups, num_regions, time_horizon, init_time,
             'jac': lambda x: Af}
 
     bound0 = np.zeros(N_f*T)
-    bound_full = np.zeros(N_f*T)
+    bound_full_orig = np.zeros(N_f*T)
     idx_t = 0
     for g in range(N_g):
         for k in range(N_p):
             low_idx = int(idx_t*T)
             up_idx = int((idx_t+1)*T)
-            bound_full[low_idx:up_idx] = n_max/age_er[k, g]
+            bound_full_orig[low_idx:up_idx] = n_max/age_er[k, g]
             idx_t += 1
 
-    init_bounds = Bounds(bound0, bound_full)
+    init_bounds = Bounds(bound0, bound_full_orig)
 
     print('Constructed initial bounds.')
 
@@ -366,9 +360,9 @@ def optimize(filename, num_age_groups, num_regions, time_horizon, init_time,
     kg_pairs = []
 
     minimize_iter = 1
-    last_len_kg_pairs = len(kg_pairs)
     u_op = x0
     bounds = init_bounds
+    last_value = np.inf
     while True:
         print(('Starting minimize %d iteration.\n'
                'KG pairs: %s') % (minimize_iter, kg_pairs))
@@ -378,16 +372,15 @@ def optimize(filename, num_age_groups, num_regions, time_horizon, init_time,
 
         print('Finished minimize, looking for new KG pairs.')
         u_op = np.reshape(res.x, (N_g, N_p, T))
-        bound_full, kg_pairs = bound_f(bound_full, u_op, kg_pairs)
+        bound_full, kg_pairs, D_g = bound_f(bound_full_orig, u_op, kg_pairs)
         bounds = Bounds(bound0, bound_full)
 
-        # There were not new kg pairs added
-        if len(kg_pairs) == last_len_kg_pairs:
-            break
-
-        last_len_kg_pairs = len(kg_pairs)
-        print('Finished minimize %d iteration.' % (minimize_iter, ))
+        print('Finished minimize %d iteration. D_g value: %s' % (minimize_iter, D_g))
         minimize_iter += 1
+
+        if np.isclose(last_value, D_g):
+            print('Last iteration results were close, breaking.')
+            break
 
     print('Finished iterations. Final KG pairs: %s' % (kg_pairs, ))
     json_save = {
