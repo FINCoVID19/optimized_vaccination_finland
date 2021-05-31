@@ -502,7 +502,8 @@ def full_optimize(r, beta_sim, tau, time_horizon, init_time,
            'Complete D_g: %s.\n'
            'Final KG pairs: %s.\n'
            'Final shape u_op: %s.\n'
-           'Final populations:\n%s') % (D_g, kg_pairs, u_op.shape, new_epidemic_npy))
+           'Final populations:\n%s') % (D_g, kg_pairs, u_op.shape,
+                                        new_epidemic_npy*age_er_div))
 
     with open(json_file_path, 'w', encoding='utf-8') as f:
         json.dump(json_save, f, indent=2)
@@ -517,7 +518,7 @@ def run_optimize(r, tau, beta_sim, time_horizon, init_time, total_time):
         print('Starting (%s). R: %s. Tau: %s. T: %s. T0: %s' % (proc_number,
                                                                 r,
                                                                 tau,
-                                                                time_horizon,
+                                                                total_time,
                                                                 init_time))
 
         filename = full_optimize(r=r,
@@ -534,7 +535,7 @@ def run_optimize(r, tau, beta_sim, time_horizon, init_time, total_time):
         print('Finished (%s). R: %s. Tau: %s. T: %s. T0: %s. Time: %s' % (proc_number,
                                                                           r,
                                                                           tau,
-                                                                          time_horizon,
+                                                                          total_time,
                                                                           init_time,
                                                                           elapsed_delta))
 
@@ -569,7 +570,7 @@ def run_parallel_optimizations():
     #     (1.5,  1.0,  0.03559801015581483),
     # ]
     all_experiments = [
-        (1.5,  0.5,  0.03484016211750431, 20, '2021-04-18', 30),
+        (1.5,  0.5,  0.03484016211750431, 80, '2021-04-18', 115),
     ]
     num_cpus = os.cpu_count()
     start_time = time.time()
