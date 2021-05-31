@@ -12,7 +12,7 @@ from env_var import EPIDEMIC
 from forward_integration import get_model_parameters
 
 
-def sol(u_con, mob_av, beta, beta_gh, T, pop_hat, age_er, epidemic_npy):
+def sol(u_con, mob_av, beta, beta_gh, T, pop_hat, age_er, epidemic_npy, return_states):
     T_E = EPIDEMIC['T_E']
     T_V = EPIDEMIC['T_V']
     T_I = EPIDEMIC['T_I']
@@ -112,7 +112,26 @@ def sol(u_con, mob_av, beta, beta_gh, T, pop_hat, age_er, epidemic_npy):
     V_d = u*age_er_t[:, :, np.newaxis]
     V_d = V_d.sum(axis=(0, 1))
 
-    return S_g, S_vg, S_xg, L_g, D_d.sum(), V_d, u
+    if not return_states:
+        return S_g, S_vg, S_xg, L_g, D_d.sum(), V_d, u
+
+    new_epidemic_npy = np.zeros((N_g, N_p, 13))
+    new_epidemic_npy[:, :, 0] = S_g[:, :, T-1]
+    new_epidemic_npy[:, :, 1] = I_g[:, :, T-1]
+    new_epidemic_npy[:, :, 2] = E_g[:, :, T-1]
+    new_epidemic_npy[:, :, 3] = R_g[:, :, T-1]
+    new_epidemic_npy[:, :, 4] = V_g[:, :, T-1]
+    new_epidemic_npy[:, :, 5] = S_xg[:, :, T-1]
+    new_epidemic_npy[:, :, 6] = H_wg[:, :, T-1]
+    new_epidemic_npy[:, :, 7] = H_cg[:, :, T-1]
+
+    new_epidemic_npy[:, :, 8] = D_g[:, :, T-1]
+    new_epidemic_npy[:, :, 9] = Q_0g[:, :, T-1]
+    new_epidemic_npy[:, :, 10] = Q_1g[:, :, T-1]
+    new_epidemic_npy[:, :, 11] = H_rg[:, :, T-1]
+    new_epidemic_npy[:, :, 12] = S_vg[:, :, T-1]
+
+    return S_g, L_g, D_d.sum(), u, new_epidemic_npy
 
 
 def back_int(S_g, S_vg, S_xg, L_g, beta_gh, beta, T, age_er, mob_av, pop_hat):
@@ -212,7 +231,7 @@ def ob_fun(x):
 
     nuf = np.reshape(x, (N_g, N_p, T))
     S_g, S_vg, S_xg, L_g, D_g, _, _ = sol(nuf, mob_av, beta, beta_gh, T,
-                                          pop_hat, age_er, epidemic_npy)
+                                          pop_hat, age_er, epidemic_npy, False)
 
     J = (D_g)
 
@@ -228,7 +247,7 @@ def der(x):
 
     nuf = np.reshape(x, (N_g, N_p, T))
     S_g, S_vg, S_xg, L_g, _, _, _ = sol(nuf, mob_av, beta, beta_gh, T,
-                                        pop_hat, age_er, epidemic_npy)
+                                        pop_hat, age_er, epidemic_npy, False)
     # calculation of the gradient
     dH = back_int(S_g, S_vg, S_xg, L_g, beta_gh, beta, T, age_er, mob_av, pop_hat)
 
@@ -243,8 +262,8 @@ def der(x):
 
 def bound_f(bound_full_orig, u_op):
     bound_r = np.reshape(bound_full_orig, (N_g, N_p, T))
-    S_g, S_vg, S_xg, L_g, D_g, _, _ = sol(u_op, mob_av, beta, beta_gh, T,
-                                          pop_hat, age_er, epidemic_npy)
+    S_g, L_g, D_g, u_op, new_epidemic_npy = sol(u_op, mob_av, beta, beta_gh, T,
+                                                pop_hat, age_er, epidemic_npy, True)
 
     kg_pairs = []
     for i in range(T):
@@ -259,7 +278,7 @@ def bound_f(bound_full_orig, u_op):
 
     bound_rf = np.reshape(bound_r, N_g*N_p*T)
 
-    return bound_rf, kg_pairs, D_g
+    return bound_rf, kg_pairs, D_g, u_op, new_epidemic_npy
 
 
 def optimize(file_npy, file_json, epidemic_npy_complete):
@@ -270,6 +289,7 @@ def optimize(file_npy, file_json, epidemic_npy_complete):
 
     global epidemic_npy
     epidemic_npy = epidemic_npy_complete
+    print('Current population:\n%s' % (epidemic_npy, ))
 
     # Constraints
     Af = np.array([]).reshape(T, 0)
@@ -313,7 +333,7 @@ def optimize(file_npy, file_json, epidemic_npy_complete):
 
         print('Finished minimize, looking for KG pairs.')
         u_op = np.reshape(res.x, (N_g, N_p, T))
-        bound_full, kg_pairs, D_g = bound_f(bound_full_orig, u_op)
+        bound_full, kg_pairs, D_g, u_op, new_epidemic_npy = bound_f(bound_full_orig, u_op)
         bounds = Bounds(bound0, bound_full)
 
         print(('Finished minimize %d iteration.\n'
@@ -338,9 +358,11 @@ def optimize(file_npy, file_json, epidemic_npy_complete):
     np.save(file_npy, u_op)
     print('File written to: %s and %s' % (file_npy, file_json))
 
+    return new_epidemic_npy
+
 
 def full_optimize(beta_sim, tau, file_npy, file_json, time_horizon, init_time,
-                  num_age_groups, num_regions):
+                  total_time, num_age_groups, num_regions):
     global beta
     beta = beta_sim
 
@@ -352,9 +374,6 @@ def full_optimize(beta_sim, tau, file_npy, file_json, time_horizon, init_time,
 
     global N_p
     N_p = num_regions
-
-    global T
-    T = time_horizon
 
     global mob_av, beta_gh, pop_hat, age_er
     mob_av, beta_gh, pop_hat, age_er, rho = get_model_parameters(
@@ -410,7 +429,14 @@ def full_optimize(beta_sim, tau, file_npy, file_json, time_horizon, init_time,
     epidemic_npy_complete[:, :, :len(select_columns)] = epidemic_npy
     print('Finished reading inital state.')
 
-    optimize(file_npy, file_json, epidemic_npy_complete)
+    global T
+    T = time_horizon
+
+    time_done = 0
+    while time_done < total_time:
+        print('Starting optimize at time: %s/%s' % (time_done, total_time))
+        epidemic_npy_complete = optimize(file_npy, file_json, epidemic_npy_complete)
+        time_done += time_horizon
 
 
 def run_optimize(r, tau, beta_sim, time_horizon, init_time):
@@ -436,6 +462,7 @@ def run_optimize(r, tau, beta_sim, time_horizon, init_time):
                       file_json=json_file_path,
                       time_horizon=time_horizon,
                       init_time=init_time,
+                      total_time=20,
                       num_age_groups=9,
                       num_regions=5)
 
