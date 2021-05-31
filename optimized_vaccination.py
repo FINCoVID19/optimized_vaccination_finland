@@ -498,15 +498,15 @@ def full_optimize(r, beta_sim, tau, time_horizon, init_time,
     json_save['D_g'] = D_g
     json_save['kg_pairs'] = kg_pairs
 
+    with open(json_file_path, 'w', encoding='utf-8') as f:
+        json.dump(json_save, f, indent=2)
+
     print(('Final results obtained.\n'
            'Complete D_g: %s.\n'
            'Final KG pairs: %s.\n'
            'Final shape u_op: %s.\n'
            'Final populations:\n%s') % (D_g, kg_pairs, u_op.shape,
                                         new_epidemic_npy*age_er_div))
-
-    with open(json_file_path, 'w', encoding='utf-8') as f:
-        json.dump(json_save, f, indent=2)
 
     return json_file_path
 
