@@ -435,6 +435,7 @@ def full_optimize(r, beta_sim, tau, time_horizon, init_time,
 
     global T
     T = time_horizon
+    print('Time horizon for optimizationL %s' % (T, ))
 
     base_name = "R_%s_tau_%s_T_%s" % (r, tau, total_time)
     dir_path = os.path.dirname(os.path.realpath(__file__))
