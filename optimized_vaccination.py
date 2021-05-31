@@ -1,8 +1,8 @@
 import os
 import time
 import datetime
-import logging
 import json
+import logging
 from multiprocessing import Pool
 import numpy as np
 from scipy.optimize import Bounds
@@ -12,7 +12,7 @@ from env_var import EPIDEMIC
 from forward_integration import get_model_parameters
 
 
-def sol(u_con, mob_av, beta, beta_gh, T, pop_hat, age_er):
+def sol(u_con, mob_av, beta, beta_gh, T, pop_hat, age_er, epidemic_npy):
     T_E = EPIDEMIC['T_E']
     T_V = EPIDEMIC['T_V']
     T_I = EPIDEMIC['T_I']
@@ -35,37 +35,6 @@ def sol(u_con, mob_av, beta, beta_gh, T, pop_hat, age_er):
     alpha = EPIDEMIC['alpha']
     e = EPIDEMIC['e']
 
-    # Reading CSV
-    csv_name = 'out/epidemic_finland_9.csv'
-    # Reading CSV
-    epidemic_csv = pd.read_csv(csv_name)
-    # Getting only date t0
-    epidemic_zero = epidemic_csv.loc[epidemic_csv['date'] == t0, :]
-    # Removing Ahvenanmaa or Aland
-    epidemic_zero = epidemic_zero[~epidemic_zero['erva'].str.contains('land')]
-
-    # Getting the order the ervas have inside the dataframe
-    ervas_order = ['HYKS', 'TYKS', 'TAYS', 'KYS', 'OYS']
-    ervas_df = list(pd.unique(epidemic_zero['erva']))
-    ervas_pd_order = [ervas_df.index(erva) for erva in ervas_order]
-
-    select_columns = ['susceptible',
-                      'infected',
-                      'exposed',
-                      'recovered',
-                      'vaccinated',
-                      'vaccinated no imm',
-                      'ward',
-                      'icu']
-    # Selecting the columns to use
-    epidemic_zero = epidemic_zero[select_columns]
-    # Converting to numpy
-    epidemic_npy = epidemic_zero.values
-    # Reshaping to 3d array
-    epidemic_npy = epidemic_npy.reshape(N_p, N_g, len(select_columns))
-    # Rearranging the order of the matrix with correct order
-    epidemic_npy = epidemic_npy[ervas_pd_order, :]
-
     # Allocating space for compartments
     S_g = np.zeros((N_g, N_p, T))
     I_g = np.zeros((N_g, N_p, T))
@@ -75,17 +44,13 @@ def sol(u_con, mob_av, beta, beta_gh, T, pop_hat, age_er):
     H_wg = np.zeros((N_g, N_p, T))
     H_cg = np.zeros((N_g, N_p, T))
     S_xg = np.zeros((N_g, N_p, T))
+    D_g = np.zeros((N_g, N_p, T))
+    Q_0g = np.zeros((N_g, N_p, T))
+    Q_1g = np.zeros((N_g, N_p, T))
+    H_rg = np.zeros((N_g, N_p, T))
+    S_vg = np.zeros((N_g, N_p, T))
 
-    # Adding 1 dimension to age_er to do array division
-    age_er_div = age_er[:, :, np.newaxis]
-    # Dividing to get the proportion
-    epidemic_npy = epidemic_npy/age_er_div
-
-    # epidemic_npy has num_ervas first, compartmetns have age first
-    # Transposing to epidemic_npy to accomodate to compartments
-    epidemic_npy = epidemic_npy.transpose(1, 0, 2)
-
-    # Initializing with CSV values
+    # Initializing with values
     S_g[:, :, 0] = epidemic_npy[:, :, 0]
     I_g[:, :, 0] = epidemic_npy[:, :, 1]
     E_g[:, :, 0] = epidemic_npy[:, :, 2]
@@ -95,12 +60,11 @@ def sol(u_con, mob_av, beta, beta_gh, T, pop_hat, age_er):
     H_wg[:, :, 0] = epidemic_npy[:, :, 6]
     H_cg[:, :, 0] = epidemic_npy[:, :, 7]
 
-    # Initializing the rest of compartments to zero
-    D_g = np.zeros((N_g, N_p, T))
-    Q_0g = np.zeros((N_g, N_p, T))
-    Q_1g = np.zeros((N_g, N_p, T))
-    H_rg = np.zeros((N_g, N_p, T))
-    S_vg = np.zeros((N_g, N_p, T))
+    D_g[:, :, 0] = epidemic_npy[:, :, 8]
+    Q_0g[:, :, 0] = epidemic_npy[:, :, 9]
+    Q_1g[:, :, 0] = epidemic_npy[:, :, 10]
+    H_rg[:, :, 0] = epidemic_npy[:, :, 11]
+    S_vg[:, :, 0] = epidemic_npy[:, :, 12]
 
     # I store the values for the force of infection (needed for the adjoint equations)
     L_g = np.zeros((N_g, N_p, T))
@@ -247,7 +211,8 @@ def ob_fun(x):
     start_obj = time.time()
 
     nuf = np.reshape(x, (N_g, N_p, T))
-    S_g, S_vg, S_xg, L_g, D_g, _, _ = sol(nuf, mob_av, beta, beta_gh, T, pop_hat, age_er)
+    S_g, S_vg, S_xg, L_g, D_g, _, _ = sol(nuf, mob_av, beta, beta_gh, T,
+                                          pop_hat, age_er, epidemic_npy)
 
     J = (D_g)
 
@@ -262,7 +227,8 @@ def der(x):
     start_der = time.time()
 
     nuf = np.reshape(x, (N_g, N_p, T))
-    S_g, S_vg, S_xg, L_g, _, _, _ = sol(nuf, mob_av, beta, beta_gh, T, pop_hat, age_er)
+    S_g, S_vg, S_xg, L_g, _, _, _ = sol(nuf, mob_av, beta, beta_gh, T,
+                                        pop_hat, age_er, epidemic_npy)
     # calculation of the gradient
     dH = back_int(S_g, S_vg, S_xg, L_g, beta_gh, beta, T, age_er, mob_av, pop_hat)
 
@@ -277,58 +243,33 @@ def der(x):
 
 def bound_f(bound_full_orig, u_op):
     bound_r = np.reshape(bound_full_orig, (N_g, N_p, T))
-    S_g, S_vg, S_xg, L_g, D_g, _, _ = sol(u_op, mob_av, beta, beta_gh, T, pop_hat, age_er)
+    S_g, S_vg, S_xg, L_g, D_g, _, _ = sol(u_op, mob_av, beta, beta_gh, T,
+                                          pop_hat, age_er, epidemic_npy)
 
     kg_pairs = []
     for i in range(T):
         for g in range(N_g-1, -1, -1):
             for k in range(N_p):
                 if S_g[g, k, i] <= 0:
-                    print('Found KG pair %s at time %s' % ((g, k), i))
-                    bound_r[g, k, i-1] = S_g[g, k, i-1] - L_g[g, k, i-1]*S_g[g, k, i-1]
-                    bound_r[g, k, i:T] = 0.0
-                    kg_pairs.append((g, k))
+                    if (g, k) not in kg_pairs:
+                        print('Found KG pair %s at time %s' % ((g, k), i))
+                        bound_r[g, k, i-1] = S_g[g, k, i-1] - L_g[g, k, i-1]*S_g[g, k, i-1]
+                        bound_r[g, k, i:T] = 0.0
+                        kg_pairs.append((g, k))
 
     bound_rf = np.reshape(bound_r, N_g*N_p*T)
 
     return bound_rf, kg_pairs, D_g
 
 
-def optimize(filename, num_age_groups, num_regions, time_horizon, init_time,
-             beta_sim=0.03559801015581483, tau=0.5):
-    global beta
-    beta = beta_sim
-
-    global mob_av, beta_gh, pop_hat, age_er
-    mob_av, beta_gh, pop_hat, age_er, rho = get_model_parameters(
-                                                number_age_groups=num_age_groups,
-                                                num_regions=num_regions,
-                                                init_vacc=True,
-                                                t0=init_time,
-                                                tau=tau
-                                            )
-
-    print('Got model parameters.')
-
-    global t0
-    t0 = init_time
-
-    global N_g
-    N_g = num_age_groups
-
-    global N_p
-    N_p = num_regions
-
-    global T
-    T = time_horizon
-
+def optimize(file_npy, file_json, epidemic_npy_complete):
     # number of optimization variables
     N_f = N_g*N_p
 
-    # transmission parameter
-    global u
-    u = np.zeros((N_g, N_p, T))
     n_max = 30000
+
+    global epidemic_npy
+    epidemic_npy = epidemic_npy_complete
 
     # Constraints
     Af = np.array([]).reshape(T, 0)
@@ -370,39 +311,116 @@ def optimize(filename, num_age_groups, num_regions, time_horizon, init_time,
                        constraints=[cons], options={'maxiter': 5, 'disp': True},
                        bounds=bounds)
 
-        print('Finished minimize, looking for new KG pairs.')
+        print('Finished minimize, looking for KG pairs.')
         u_op = np.reshape(res.x, (N_g, N_p, T))
-        bound_full, kg_pairs, D_g = bound_f(bound_full_orig, u_op, kg_pairs)
+        bound_full, kg_pairs, D_g = bound_f(bound_full_orig, u_op)
         bounds = Bounds(bound0, bound_full)
 
-        print('Finished minimize %d iteration. D_g value: %s' % (minimize_iter, D_g))
+        print(('Finished minimize %d iteration.\n'
+               'Last D_g value: %s\n'
+               'Current D_g value: %s') % (minimize_iter, last_value, D_g))
         minimize_iter += 1
 
         if np.isclose(last_value, D_g):
-            print('Last iteration results were close, breaking.')
+            print('Last iteration results converged, breaking.')
             break
+
+        last_value = D_g
 
     print('Finished iterations. Final KG pairs: %s' % (kg_pairs, ))
     json_save = {
         'kg_pairs': kg_pairs
     }
 
-    base_name = os.path.basename(filename)
-    base_name = base_name.split('.')[:-1]
-    base_name = '.'.join(base_name)
-    folder_path_lst = filename.split('/')[:-1]
-    folder_path = '/'.join(folder_path_lst)
-    json_filename = base_name + '.json'
-    json_filepath = os.path.join(folder_path, json_filename)
-    with open(json_filepath, 'w', encoding='utf-8') as f:
+    with open(file_json, 'w', encoding='utf-8') as f:
         json.dump(json_save, f, indent=2)
 
-    np.save(filename, u_op)
-    print('File written to: %s and %s' % (filename, json_filepath))
+    np.save(file_npy, u_op)
+    print('File written to: %s and %s' % (file_npy, file_json))
+
+
+def full_optimize(beta_sim, tau, file_npy, file_json, time_horizon, init_time,
+                  num_age_groups, num_regions):
+    global beta
+    beta = beta_sim
+
+    global t0
+    t0 = init_time
+
+    global N_g
+    N_g = num_age_groups
+
+    global N_p
+    N_p = num_regions
+
+    global T
+    T = time_horizon
+
+    global mob_av, beta_gh, pop_hat, age_er
+    mob_av, beta_gh, pop_hat, age_er, rho = get_model_parameters(
+                                                number_age_groups=num_age_groups,
+                                                num_regions=num_regions,
+                                                init_vacc=True,
+                                                t0=init_time,
+                                                tau=tau
+                                            )
+    print('Got model parameters.')
+
+    # Reading CSV
+    csv_name = 'out/epidemic_finland_9.csv'
+    # Reading CSV
+    epidemic_csv = pd.read_csv(csv_name)
+    # Getting only date t0
+    epidemic_zero = epidemic_csv.loc[epidemic_csv['date'] == t0, :]
+    # Removing Ahvenanmaa or Aland
+    epidemic_zero = epidemic_zero[~epidemic_zero['erva'].str.contains('land')]
+
+    # Getting the order the ervas have inside the dataframe
+    ervas_order = ['HYKS', 'TYKS', 'TAYS', 'KYS', 'OYS']
+    ervas_df = list(pd.unique(epidemic_zero['erva']))
+    ervas_pd_order = [ervas_df.index(erva) for erva in ervas_order]
+
+    select_columns = ['susceptible',
+                      'infected',
+                      'exposed',
+                      'recovered',
+                      'vaccinated',
+                      'vaccinated no imm',
+                      'ward',
+                      'icu']
+    # Selecting the columns to use
+    epidemic_zero = epidemic_zero[select_columns]
+    # Converting to numpy
+    epidemic_npy = epidemic_zero.values
+    # Reshaping to 3d array
+    epidemic_npy = epidemic_npy.reshape(N_p, N_g, len(select_columns))
+    # Rearranging the order of the matrix with correct order
+    epidemic_npy = epidemic_npy[ervas_pd_order, :]
+
+    # Adding 1 dimension to age_er to do array division
+    age_er_div = age_er[:, :, np.newaxis]
+    # Dividing to get the proportion
+    epidemic_npy = epidemic_npy/age_er_div
+
+    # epidemic_npy has num_ervas first, compartmetns have age first
+    # Transposing to epidemic_npy to accomodate to compartments
+    epidemic_npy = epidemic_npy.transpose(1, 0, 2)
+
+    epidemic_npy_complete = np.zeros((N_g, N_p, 13))
+    epidemic_npy_complete[:, :, :len(select_columns)] = epidemic_npy
+    print('Finished reading inital state.')
+
+    optimize(file_npy, file_json, epidemic_npy_complete)
 
 
 def run_optimize(r, tau, beta_sim, time_horizon, init_time):
-    filename = "R_%s_tau_%s_T_%s.npy" % (r, tau, time_horizon)
+    filename = "R_%s_tau_%s_T_%s" % (r, tau, time_horizon)
+    npy_filename = filename + '.npy'
+    json_filename = filename + '.json'
+    dir_path = os.path.dirname(os.path.realpath(__file__))
+    npy_file_path = os.path.join(dir_path, 'out', npy_filename)
+    json_file_path = os.path.join(dir_path, 'out', json_filename)
+
     try:
         start_time = time.time()
         proc_number = os.getpid()
@@ -412,15 +430,14 @@ def run_optimize(r, tau, beta_sim, time_horizon, init_time):
                                                                 time_horizon,
                                                                 init_time))
 
-        dir_path = os.path.dirname(os.path.realpath(__file__))
-        file_path = os.path.join(dir_path, 'out', filename)
-        optimize(beta_sim=beta_sim,
-                 tau=tau,
-                 filename=file_path,
-                 time_horizon=time_horizon,
-                 init_time=init_time,
-                 num_age_groups=9,
-                 num_regions=5)
+        full_optimize(beta_sim=beta_sim,
+                      tau=tau,
+                      file_npy=npy_file_path,
+                      file_json=json_file_path,
+                      time_horizon=time_horizon,
+                      init_time=init_time,
+                      num_age_groups=9,
+                      num_regions=5)
 
         elapsed_time = time.time() - start_time
         elapsed_delta = datetime.timedelta(seconds=elapsed_time)
@@ -462,7 +479,7 @@ def run_parallel_optimizations():
     #     (1.5,  1.0,  0.03559801015581483),
     # ]
     all_experiments = [
-        (1.5,  0.5,  0.03484016211750431, 50, '2021-04-18'),
+        (1.5,  0.5,  0.03484016211750431, 20, '2021-04-18'),
     ]
     num_cpus = os.cpu_count()
     start_time = time.time()
