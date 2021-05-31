@@ -131,7 +131,7 @@ def sol(u_con, mob_av, beta, beta_gh, T, pop_hat, age_er, epidemic_npy, return_s
     new_epidemic_npy[:, :, 11] = H_rg[:, :, T-1]
     new_epidemic_npy[:, :, 12] = S_vg[:, :, T-1]
 
-    return S_g, L_g, D_d.sum(), u, new_epidemic_npy
+    return D_d.sum(), u, new_epidemic_npy
 
 
 def back_int(S_g, S_vg, S_xg, L_g, beta_gh, beta, T, age_er, mob_av, pop_hat):
@@ -262,8 +262,8 @@ def der(x):
 
 def bound_f(bound_full_orig, u_op):
     bound_r = np.reshape(bound_full_orig, (N_g, N_p, T))
-    S_g, L_g, D_g, u_op, new_epidemic_npy = sol(u_op, mob_av, beta, beta_gh, T,
-                                                pop_hat, age_er, epidemic_npy, True)
+    S_g, S_vg, S_xg, L_g, D_g, _, _ = sol(u_op, mob_av, beta, beta_gh, T,
+                                          pop_hat, age_er, epidemic_npy, False)
 
     kg_pairs = []
     for i in range(T):
@@ -278,10 +278,10 @@ def bound_f(bound_full_orig, u_op):
 
     bound_rf = np.reshape(bound_r, N_g*N_p*T)
 
-    return bound_rf, kg_pairs, D_g, u_op, new_epidemic_npy
+    return bound_rf, kg_pairs, D_g
 
 
-def optimize(file_npy, file_json, epidemic_npy_complete):
+def optimize(epidemic_npy_complete):
     # number of optimization variables
     N_f = N_g*N_p
 
@@ -333,7 +333,7 @@ def optimize(file_npy, file_json, epidemic_npy_complete):
 
         print('Finished minimize, looking for KG pairs.')
         u_op = np.reshape(res.x, (N_g, N_p, T))
-        bound_full, kg_pairs, D_g, u_op, new_epidemic_npy = bound_f(bound_full_orig, u_op)
+        bound_full, kg_pairs, D_g = bound_f(bound_full_orig, u_op)
         bounds = Bounds(bound0, bound_full)
 
         print(('Finished minimize %d iteration.\n'
@@ -347,21 +347,25 @@ def optimize(file_npy, file_json, epidemic_npy_complete):
 
         last_value = D_g
 
-    print('Finished iterations. Final KG pairs: %s' % (kg_pairs, ))
-    json_save = {
-        'kg_pairs': kg_pairs
-    }
+    D_g, u_op, new_epidemic_npy = sol(u_con=u_op,
+                                      mob_av=mob_av,
+                                      beta=beta,
+                                      beta_gh=beta_gh,
+                                      T=T,
+                                      pop_hat=pop_hat,
+                                      age_er=age_er,
+                                      epidemic_npy=epidemic_npy,
+                                      return_states=True)
 
-    with open(file_json, 'w', encoding='utf-8') as f:
-        json.dump(json_save, f, indent=2)
+    print(('Finished iterations.\n'
+           'Final value: %s.\n'
+           'Final KG pairs: %s.\n'
+           'Final populations:\n%s') % (D_g, kg_pairs, new_epidemic_npy))
 
-    np.save(file_npy, u_op)
-    print('File written to: %s and %s' % (file_npy, file_json))
-
-    return new_epidemic_npy
+    return new_epidemic_npy, u_op, kg_pairs, D_g
 
 
-def full_optimize(beta_sim, tau, file_npy, file_json, time_horizon, init_time,
+def full_optimize(r, beta_sim, tau, time_horizon, init_time,
                   total_time, num_age_groups, num_regions):
     global beta
     beta = beta_sim
@@ -425,28 +429,88 @@ def full_optimize(beta_sim, tau, file_npy, file_json, time_horizon, init_time,
     # Transposing to epidemic_npy to accomodate to compartments
     epidemic_npy = epidemic_npy.transpose(1, 0, 2)
 
-    epidemic_npy_complete = np.zeros((N_g, N_p, 13))
-    epidemic_npy_complete[:, :, :len(select_columns)] = epidemic_npy
+    initial_epidemic_npy = np.zeros((N_g, N_p, 13))
+    initial_epidemic_npy[:, :, :len(select_columns)] = epidemic_npy
     print('Finished reading inital state.')
 
     global T
     T = time_horizon
 
+    base_name = "R_%s_tau_%s_T_%s" % (r, tau, total_time)
+    dir_path = os.path.dirname(os.path.realpath(__file__))
+
+    json_file = "%s.json" % (base_name, )
+    json_file_path = os.path.join(dir_path, 'out', json_file)
+
+    epidemic_npy_complete = initial_epidemic_npy
+    json_save = {}
     time_done = 0
+    u_total = np.array([]).reshape(N_g, N_p, 0)
     while time_done < total_time:
         print('Starting optimize at time: %s/%s' % (time_done, total_time))
-        epidemic_npy_complete = optimize(file_npy, file_json, epidemic_npy_complete)
+        epidemic_npy_complete, u_op, kg_pairs, D_g = optimize(epidemic_npy_complete)
         time_done += time_horizon
+        print('Finished optimization, saving results.')
+
+        u_total = np.concatenate((u_total, u_op), axis=2)
+        
+        json_save[time_done] = {}
+        u_op_filename = '%s_%s_u_op.npy' % (base_name, time_done)
+        epidemic_npy_filename = '%s_%s_epidemic.npy' % (base_name, time_done)
+        
+        u_op_file_path = os.path.join(dir_path, 'out', u_op_filename)
+        epidemic_file_path = os.path.join(dir_path, 'out', epidemic_npy_filename)
+
+        json_save[time_done]['u_op'] = u_op_file_path
+        json_save[time_done]['epidemic'] = epidemic_file_path
+        json_save[time_done]['D_g'] = D_g
+        json_save[time_done]['kg_pairs'] = kg_pairs
+
+        np.save(u_op_file_path, u_op)
+        np.save(epidemic_file_path, epidemic_npy_complete)
+        print('File written to: %s and %s' % (u_op_file_path, epidemic_file_path))
+
+        with open(json_file_path, 'w', encoding='utf-8') as f:
+            json.dump(json_save, f, indent=2)
+
+    D_g, u_op, new_epidemic_npy = sol(u_con=u_total,
+                                      mob_av=mob_av,
+                                      beta=beta,
+                                      beta_gh=beta_gh,
+                                      T=total_time,
+                                      pop_hat=pop_hat,
+                                      age_er=age_er,
+                                      epidemic_npy=initial_epidemic_npy,
+                                      return_states=True)
+    u_op_filename = '%s_u_op.npy' % (base_name, )
+    u_op_file_path = os.path.join(dir_path, 'out', u_op_filename)
+    initial_epi_filename = '%s_initial_epidemic.npy' % (base_name, )
+    initial_epi_file_path = os.path.join(dir_path, 'out', initial_epi_filename)
+    final_epi_filename = '%s_final_epidemic.npy' % (base_name, )
+    final_epi_file_path = os.path.join(dir_path, 'out', final_epi_filename)
+    np.save(u_op_file_path, u_op)
+    np.save(initial_epi_file_path, initial_epidemic_npy)
+    np.save(final_epi_file_path, new_epidemic_npy)
+
+    json_save['initial_epidemic'] = initial_epi_file_path
+    json_save['u_op'] = u_op_file_path
+    json_save['final_epidemic'] = final_epi_file_path
+    json_save['D_g'] = D_g
+    json_save['kg_pairs'] = kg_pairs
+
+    print(('Final results obtained.\n'
+           'Complete D_g: %s.\n'
+           'Final KG pairs: %s.\n'
+           'Final shape u_op: %s.\n'
+           'Final populations:\n%s') % (D_g, kg_pairs, u_op.shape, new_epidemic_npy))
+
+    with open(json_file_path, 'w', encoding='utf-8') as f:
+        json.dump(json_save, f, indent=2)
+
+    return json_file_path
 
 
-def run_optimize(r, tau, beta_sim, time_horizon, init_time):
-    filename = "R_%s_tau_%s_T_%s" % (r, tau, time_horizon)
-    npy_filename = filename + '.npy'
-    json_filename = filename + '.json'
-    dir_path = os.path.dirname(os.path.realpath(__file__))
-    npy_file_path = os.path.join(dir_path, 'out', npy_filename)
-    json_file_path = os.path.join(dir_path, 'out', json_filename)
-
+def run_optimize(r, tau, beta_sim, time_horizon, init_time, total_time):
     try:
         start_time = time.time()
         proc_number = os.getpid()
@@ -456,15 +520,14 @@ def run_optimize(r, tau, beta_sim, time_horizon, init_time):
                                                                 time_horizon,
                                                                 init_time))
 
-        full_optimize(beta_sim=beta_sim,
-                      tau=tau,
-                      file_npy=npy_file_path,
-                      file_json=json_file_path,
-                      time_horizon=time_horizon,
-                      init_time=init_time,
-                      total_time=20,
-                      num_age_groups=9,
-                      num_regions=5)
+        filename = full_optimize(r=r,
+                                 beta_sim=beta_sim,
+                                 tau=tau,
+                                 time_horizon=time_horizon,
+                                 init_time=init_time,
+                                 total_time=total_time,
+                                 num_age_groups=9,
+                                 num_regions=5)
 
         elapsed_time = time.time() - start_time
         elapsed_delta = datetime.timedelta(seconds=elapsed_time)
@@ -506,7 +569,7 @@ def run_parallel_optimizations():
     #     (1.5,  1.0,  0.03559801015581483),
     # ]
     all_experiments = [
-        (1.5,  0.5,  0.03484016211750431, 20, '2021-04-18'),
+        (1.5,  0.5,  0.03484016211750431, 20, '2021-04-18', 30),
     ]
     num_cpus = os.cpu_count()
     start_time = time.time()
@@ -516,8 +579,10 @@ def run_parallel_optimizations():
     with Pool(processes=num_cpus) as pool:
         # Calling the function to execute simulations in asynchronous way
         async_res = [pool.apply_async(func=run_optimize,
-                                      args=(r, tau, beta_sim, time_horizon, init_time))
-                     for r, tau, beta_sim, time_horizon, init_time in all_experiments]
+                                      args=(r, tau, beta_sim,
+                                            time_horizon, init_time, total_time))
+                     for r, tau, beta_sim,
+                     time_horizon, init_time, total_time in all_experiments]
 
         # Waiting for the values of the async execution
         for res in async_res:
