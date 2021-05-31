@@ -244,16 +244,23 @@ def back_int(S_g, S_vg, S_xg, L_g, beta_gh, beta, T, age_er, mob_av, pop_hat):
 
 
 def ob_fun(x):
+    start_obj = time.time()
+
     nuf = np.reshape(x, (N_g, N_p, T))
     S_g, S_vg, S_xg, L_g, Dg, _, _ = sol(nuf, mob_av, beta, beta_gh, T, pop_hat, age_er)
 
     J = (Dg)
-    print('Obj function: %s' % (J, ))
+
+    elapsed_time = time.time() - start_obj
+    elapsed_delta = datetime.timedelta(seconds=elapsed_time)
+    print('Finished ob_fun function. Value: %s. Elapsed time: %s' % (J, elapsed_delta))
 
     return J
 
 
 def der(x):
+    start_der = time.time()
+
     nuf = np.reshape(x, (N_g, N_p, T))
     S_g, S_vg, S_xg, L_g, _, _, _ = sol(nuf, mob_av, beta, beta_gh, T, pop_hat, age_er)
     # calculation of the gradient
@@ -261,21 +268,25 @@ def der(x):
 
     dH2 = np.reshape(dH, (N_g*N_p*T))
 
+    elapsed_time = time.time() - start_der
+    elapsed_delta = datetime.timedelta(seconds=elapsed_time)
+    print('Finished der function. Elapsed time: %s' % (elapsed_delta, ))
+
     return dH2
 
 
-def bound_f(bound_full, T_i, u_op, kg_pairs):
+def bound_f(bound_full, u_op, kg_pairs):
     bound_r = np.reshape(bound_full, (N_g, N_p, T))
     S_g, S_vg, S_xg, L_g, _, _, _ = sol(u_op, mob_av, beta, beta_gh, T, pop_hat, age_er)
 
     break_time = False
-    for i in range(T_i+1, T):
+    for i in range(T):
         for g in range(N_g-1, -1, -1):
             for k in range(N_p):
                 if S_g[g, k, i] <= 0:
                     if (g, k) not in kg_pairs:
                         T_i = i
-                        print(T_i, g, k)
+                        print('Found KG pair %s at time %s' % ((g, k), T_i))
                         bound_r[g, k, i-1] = S_g[g, k, i-1] - L_g[g, k, i-1]*S_g[g, k, i-1]
                         bound_r[g, k, i:T] = 0.0
                         kg_pairs.append((g, k))
@@ -286,7 +297,7 @@ def bound_f(bound_full, T_i, u_op, kg_pairs):
 
     bound_rf = np.reshape(bound_r, N_g*N_p*T)
 
-    return bound_rf, T_i, kg_pairs
+    return bound_rf, kg_pairs
 
 
 def optimize(filename, num_age_groups, num_regions, time_horizon, init_time,
@@ -294,7 +305,6 @@ def optimize(filename, num_age_groups, num_regions, time_horizon, init_time,
     global beta
     beta = beta_sim
 
-    start_params = time.time()
     global mob_av, beta_gh, pop_hat, age_er
     mob_av, beta_gh, pop_hat, age_er, rho = get_model_parameters(
                                                 number_age_groups=num_age_groups,
@@ -304,11 +314,8 @@ def optimize(filename, num_age_groups, num_regions, time_horizon, init_time,
                                                 tau=tau
                                             )
 
-    elapsed_time = time.time() - start_params
-    elapsed_delta = datetime.timedelta(seconds=elapsed_time)
-    print('Got model parameters. Elapsed: %s' % (elapsed_delta, ))
+    print('Got model parameters.')
 
-    start_bounds = time.time()
     global t0
     t0 = init_time
 
@@ -342,66 +349,54 @@ def optimize(filename, num_age_groups, num_regions, time_horizon, init_time,
             'jac': lambda x: Af}
 
     bound0 = np.zeros(N_f*T)
-    bound1 = np.zeros(N_f*T)
+    bound_full = np.zeros(N_f*T)
     idx_t = 0
     for g in range(N_g):
         for k in range(N_p):
             low_idx = int(idx_t*T)
             up_idx = int((idx_t+1)*T)
-            bound1[low_idx:up_idx] = n_max/age_er[k, g]
+            bound_full[low_idx:up_idx] = n_max/age_er[k, g]
             idx_t += 1
 
-    bounds = Bounds(bound0, bound1)
+    init_bounds = Bounds(bound0, bound_full)
 
-    elapsed_time = time.time() - start_bounds
-    elapsed_delta = datetime.timedelta(seconds=elapsed_time)
-    print('Constructed bounds. Elapsed: %s' % (elapsed_delta, ))
+    print('Constructed initial bounds.')
 
-    start_first = time.time()
     x0 = np.zeros(N_f*T)
-    res = minimize(ob_fun, x0, method='SLSQP', jac=der,
-                   constraints=[cons], options={'maxiter': 5, 'disp': True},
-                   bounds=bounds)
-    elapsed_time = time.time() - start_first
-    elapsed_delta = datetime.timedelta(seconds=elapsed_time)
-    print('Finished first optim. Elapsed: %s' % (elapsed_delta, ))
+    kg_pairs = []
 
-    nuf_o = np.reshape(res.x, (N_g, N_p, T))
-    u_old = nuf_o
-    T_old = 0
-    bound_old = bound1
-    old_kg_pairs = []
-    for i in range(12):
-        start_sim = time.time()
-
-        bound_new, T_new, new_kg_pairs = bound_f(bound_old, T_old, u_old, old_kg_pairs)
-        bound_old = bound_new
-        T_old = T_new
-        old_kg_pairs = new_kg_pairs
-        if len(new_kg_pairs) >= 12:
-            nuf = u_old
-            break
-
-        bounds = Bounds(bound0, bound_new)
-        res = minimize(ob_fun, x0, method='SLSQP', jac=der,
+    minimize_iter = 1
+    last_len_kg_pairs = len(kg_pairs)
+    u_op = x0
+    bounds = init_bounds
+    while True:
+        print(('Starting minimize %d iteration.\n'
+               'KG pairs: %s') % (minimize_iter, kg_pairs))
+        res = minimize(ob_fun, u_op, method='SLSQP', jac=der,
                        constraints=[cons], options={'maxiter': 5, 'disp': True},
                        bounds=bounds)
 
-        nuf = np.reshape(res.x, (N_g, N_p, T))
-        u_old = nuf
+        print('Finished minimize, looking for new KG pairs.')
+        u_op = np.reshape(res.x, (N_g, N_p, T))
+        bound_full, kg_pairs = bound_f(bound_full, u_op, kg_pairs)
+        bounds = Bounds(bound0, bound_full)
 
-        print('old_kg_pairs: %s' % (old_kg_pairs, ))
-        elapsed_time = time.time() - start_sim
-        elapsed_delta = datetime.timedelta(seconds=elapsed_time)
-        print('Finished simulation %s. Elapsed: %s' % (i+1, elapsed_delta))
+        # There were not new kg pairs added
+        if len(kg_pairs) == last_len_kg_pairs:
+            break
 
+        last_len_kg_pairs = len(kg_pairs)
+        print('Finished minimize %d iteration.' % (minimize_iter, ))
+        minimize_iter += 1
+
+    print('Finished iterations. Final KG pairs: %s' % (kg_pairs, ))
     json_save = {
-        'old_kg_pairs': old_kg_pairs
+        'kg_pairs': kg_pairs
     }
 
-    # Save old_kg_pairs
     base_name = os.path.basename(filename)
-    base_name = base_name.split('.')[0]
+    base_name = base_name.split('.')[:-1]
+    base_name = '.'.join(base_name)
     folder_path_lst = filename.split('/')[:-1]
     folder_path = '/'.join(folder_path_lst)
     json_filename = base_name + '.json'
@@ -409,7 +404,7 @@ def optimize(filename, num_age_groups, num_regions, time_horizon, init_time,
     with open(json_filepath, 'w', encoding='utf-8') as f:
         json.dump(json_save, f, indent=2)
 
-    np.save(filename, nuf)
+    np.save(filename, u_op)
     print('File written to: %s and %s' % (filename, json_filepath))
 
 
@@ -474,7 +469,7 @@ def run_parallel_optimizations():
     #     (1.5,  1.0,  0.03559801015581483),
     # ]
     all_experiments = [
-        (1.5,  0.5,  0.03484016211750431, 115, '2021-04-18'),
+        (1.5,  0.5,  0.03484016211750431, 50, '2021-04-18'),
     ]
     num_cpus = os.cpu_count()
     start_time = time.time()
