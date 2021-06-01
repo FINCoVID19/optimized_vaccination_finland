@@ -109,6 +109,12 @@ def sol(u_con, mob_av, beta, beta_gh, T, pop_hat, age_er, epidemic_npy, return_s
 
         D_d[:, :, j] = T_q1*Q_1g[:, :, j]*age_er_t
 
+    # Filling the values at the last time step
+    infect_mobility = (I_g[:, :, T-1]*age_er_t)@mobility_term.T
+    lambda_g = beta_gh.T@infect_mobility
+    L_g[:, :, T-1] = beta*lambda_g
+    u[:, :, T-1] = np.minimum(u_con[:, :, T-1], np.maximum(0.0, S_g[:, :, T-1] - beta*lambda_g*S_g[:, :, T-1]))
+    
     D_d[:, :, T-1] = T_q1*Q_1g[:, :, T-1]*age_er_t
 
     V_d = u*age_er_t[:, :, np.newaxis]
@@ -240,7 +246,7 @@ def ob_fun(x):
 
     elapsed_time = time.time() - start_obj
     elapsed_delta = datetime.timedelta(seconds=elapsed_time)
-    logger.info('Finished ob_fun function. Value: %s. Elapsed time: %s' % (J, elapsed_delta))
+    logger.info('ob_fun function. Value: %s. Elapsed time: %s' % (J, elapsed_delta))
 
     return J
 
@@ -259,7 +265,7 @@ def der(x):
 
     elapsed_time = time.time() - start_der
     elapsed_delta = datetime.timedelta(seconds=elapsed_time)
-    logger.info('Finished der function. Elapsed time: %s' % (elapsed_delta, ))
+    logger.info('der function. Elapsed time: %s' % (elapsed_delta, ))
 
     return dH2
 
@@ -356,7 +362,7 @@ def optimize(epidemic_npy_complete):
                        constraints=[cons], options={'maxiter': 5},
                        bounds=bounds)
 
-        logger.info('Finished minimize:\n%s\nLooking for KG pairs.' % (log_out_minimize(res), ))
+        logger.info('minimize done:\n%s\nLooking for KG pairs.' % (log_out_minimize(res), ))
         u_op = np.reshape(res.x, (N_g, N_p, T))
         bound_full, kg_pairs, D_g = bound_f(bound_full_orig, u_op)
         bounds = Bounds(bound0, bound_full)
@@ -387,9 +393,12 @@ def optimize(epidemic_npy_complete):
                                       return_states=True)
 
     logger.info(('Finished iterations.\n'
-                 'Final value: %s.\n'
-                 'Final KG pairs: %s.') % (D_g, kg_pairs))
-    logger.debug('Final population:\n%s' % (new_epidemic_npy*mult_age_er, ))
+                 'value: %s.\n'
+                 'KG pairs: %s.') % (D_g, kg_pairs))
+    logger.debug('Population:\n%s' % (new_epidemic_npy*mult_age_er, ))
+    u_op_day = u_op*mult_age_er
+    u_op_day = u_op_day.sum(axis=(0, 1))
+    logger.debug('Vaccination/day:\n%s' % (u_op_day, ))
 
     return new_epidemic_npy, u_op, kg_pairs, D_g
 
@@ -470,7 +479,7 @@ def full_optimize(r, tau, time_horizon, init_time,
 
     initial_epidemic_npy = np.zeros((N_g, N_p, 13))
     initial_epidemic_npy[:, :, :len(select_columns)] = epidemic_npy
-    logger.info('Finished reading inital state.')
+    logger.info('Initial state read.')
 
     global T
     T = time_horizon
@@ -513,7 +522,7 @@ def full_optimize(r, tau, time_horizon, init_time,
         with open(json_file_path, 'w', encoding='utf-8') as f:
             json.dump(json_save, f, indent=2)
 
-    logger.info('Finished with total time, obtaining final results.')
+    logger.info('All times finished, obtaining final results.')
 
     D_g, u_op, new_epidemic_npy = sol(u_con=u_total,
                                       mob_av=mob_av,
@@ -547,10 +556,12 @@ def full_optimize(r, tau, time_horizon, init_time,
                  'Complete D_g: %s.\n'
                  'Final KG pairs: %s.\n'
                  'Final shape u_op: %s.\n'
-                 'JSON file: %s.\n'
-                 'Final populations:\n%s') % (D_g, kg_pairs, u_op.shape,
-                                              json_file_path,
-                                              new_epidemic_npy*age_er_ext))
+                 'JSON file: %s.') % (D_g, kg_pairs, u_op.shape,
+                                      json_file_path))
+    logger.debug('Final populations:\n%s' % (new_epidemic_npy*age_er_ext, ))
+    u_op_day = u_op*age_er_ext
+    u_op_day = u_op_day.sum(axis=(0, 1))
+    logger.debug('Final vaccination/day:\n%s' % (u_op_day, ))
 
     return json_file_path
 
@@ -592,7 +603,7 @@ def run_optimize(r, tau, time_horizon, init_time, total_time):
 
 def create_logger():
     logger = multiprocessing.get_logger()
-    logger.setLevel(logging.INFO)
+    logger.setLevel(logging.DEBUG)
     formatter = logging.Formatter(
         fmt='%(asctime)s %(levelname)s %(processName)s: %(message)s',
         datefmt='%m/%d/%Y %H:%M:%S %p'
