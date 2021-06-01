@@ -11,7 +11,7 @@ from scipy.optimize import Bounds
 from scipy.optimize import minimize
 import pandas as pd
 from env_var import EPIDEMIC
-from forward_integration import get_model_parameters
+from forward_integration import get_model_parameters, read_initial_values
 
 
 def sol(u_con, mob_av, beta, beta_gh, T, pop_hat, age_er, epidemic_npy, return_states):
@@ -435,50 +435,16 @@ def full_optimize(r, tau, time_horizon, init_time,
 
     logger.info('Got model parameters.\nBeta: %s' % (beta, ))
 
-    # Reading CSV
-    csv_name = 'out/epidemic_finland_9.csv'
-    logger.debug('Reading %s for initial state.' % (csv_name, ))
-    # Reading CSV
-    epidemic_csv = pd.read_csv(csv_name)
-    # Getting only date t0
-    epidemic_zero = epidemic_csv.loc[epidemic_csv['date'] == t0, :]
-    # Removing Ahvenanmaa or Aland
-    epidemic_zero = epidemic_zero[~epidemic_zero['erva'].str.contains('land')]
-
-    # Getting the order the ervas have inside the dataframe
-    ervas_order = ['HYKS', 'TYKS', 'TAYS', 'KYS', 'OYS']
-    ervas_df = list(pd.unique(epidemic_zero['erva']))
-    ervas_pd_order = [ervas_df.index(erva) for erva in ervas_order]
-
-    select_columns = ['susceptible',
-                      'infected',
-                      'exposed',
-                      'recovered',
-                      'vaccinated',
-                      'vaccinated no imm',
-                      'ward',
-                      'icu']
-    # Selecting the columns to use
-    epidemic_zero = epidemic_zero[select_columns]
-    # Converting to numpy
-    epidemic_npy = epidemic_zero.values
-    # Reshaping to 3d array
-    epidemic_npy = epidemic_npy.reshape(N_p, N_g, len(select_columns))
-    # Rearranging the order of the matrix with correct order
-    epidemic_npy = epidemic_npy[ervas_pd_order, :]
-
-    # Adding 1 dimension to age_er to do array division
+    # Adding 1 dimension to age_er to do data manipulation
     age_er_ext = age_er.T[:, :, np.newaxis]
 
-    # epidemic_npy has num_ervas first, compartmetns have age first
-    # Transposing to epidemic_npy to accomodate to compartments
-    epidemic_npy = epidemic_npy.transpose(1, 0, 2)
-
-    # Dividing to get the proportion
-    epidemic_npy = epidemic_npy/age_er_ext
+    epidemic_npy = read_initial_values(age_er=age_er,
+                                       init_vacc=True,
+                                       t0=t0)
+    _, _, columns = epidemic_npy.shape
 
     initial_epidemic_npy = np.zeros((N_g, N_p, 13))
-    initial_epidemic_npy[:, :, :len(select_columns)] = epidemic_npy
+    initial_epidemic_npy[:, :, :columns] = epidemic_npy
     logger.info('Initial state read.')
 
     global T

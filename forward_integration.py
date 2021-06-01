@@ -1,3 +1,4 @@
+import os
 import numpy as np
 import pandas as pd
 import logging
@@ -244,10 +245,12 @@ def read_initial_values(age_er, init_vacc, t0):
     N_p = num_regions
     N_g = num_age_groups
 
+    dir_path = os.path.dirname(os.path.realpath(__file__))
     if init_vacc:
-        csv_name = 'out/epidemic_finland_%d.csv' % (num_age_groups, )
+        csv_name = 'epidemic_finland_%d.csv' % (num_age_groups, )
     else:
-        csv_name = 'out/epidemic_finland_%d_no_vacc.csv' % (num_age_groups, )
+        csv_name = 'epidemic_finland_%d_no_vacc.csv' % (num_age_groups, )
+    csv_name = os.path.join(dir_path, 'out', csv_name)
 
     # Reading CSV
     epidemic_csv = pd.read_csv(csv_name)
@@ -293,7 +296,9 @@ def read_initial_values(age_er, init_vacc, t0):
 
 def get_model_parameters(number_age_groups, num_regions, init_vacc, t0, tau):
     logger = logging.getLogger()
-    pop_file = 'stats/erva_population_age_2020.csv'
+    dir_path = os.path.dirname(os.path.realpath(__file__))
+
+    pop_file = os.path.join(dir_path, 'stats', 'erva_population_age_2020.csv')
     pop_regions_age, _ = static_population_erva_age(logger, pop_file,
                                                     number_age_groups=number_age_groups)
     pop_regions_age = pop_regions_age[~pop_regions_age['erva'].str.contains('All')]
@@ -310,9 +315,10 @@ def get_model_parameters(number_age_groups, num_regions, init_vacc, t0, tau):
     age_er = pop_regions_npy[ervas_pd_order, :]
 
     if init_vacc:
-        csv_name = 'out/epidemic_finland_%d.csv' % (number_age_groups, )
+        csv_name = 'epidemic_finland_%d.csv' % (number_age_groups, )
     else:
-        csv_name = 'out/epidemic_finland_%d_no_vacc.csv' % (number_age_groups, )
+        csv_name = 'epidemic_finland_%d_no_vacc.csv' % (number_age_groups, )
+    csv_name = os.path.join(dir_path, 'out', csv_name)
 
     # Reading CSV
     epidemic_csv = pd.read_csv(csv_name)
