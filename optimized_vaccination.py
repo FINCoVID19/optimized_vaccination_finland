@@ -332,7 +332,7 @@ def optimize(epidemic_npy_complete):
     minimize_iter = 1
     u_op = x0
     bounds = init_bounds
-    last_value = np.inf
+    last_values = np.array([np.inf])
     while True:
         start_iter = time.time()
         logger.info(('Starting minimize. Iteration: %s.\n'
@@ -350,16 +350,16 @@ def optimize(epidemic_npy_complete):
         elapsed_delta = datetime.timedelta(seconds=elapsed_time)
         logger.info(('Finished minimize. Iteration: %s.\n'
                      'Elapsed time: %s\n'
-                     'Last D_g value: %s\n'
+                     'Last D_g values: %s\n'
                      'Current D_g value: %s') % (minimize_iter, elapsed_delta,
-                                                 last_value, D_g))
+                                                 last_values[-3:], D_g))
         minimize_iter += 1
 
-        if np.isclose(last_value, D_g):
-            logger.info('Last iteration results converged, breaking.')
+        if np.allclose(last_values[-3:], D_g):
+            logger.info('Last iterations results converged, breaking.')
             break
 
-        last_value = D_g
+        last_values = np.concatenate((last_values, [D_g]))
 
     D_g, u_op, new_epidemic_npy = sol(u_con=u_op,
                                       mob_av=mob_av,
@@ -531,7 +531,9 @@ def full_optimize(r, beta_sim, tau, time_horizon, init_time,
                  'Complete D_g: %s.\n'
                  'Final KG pairs: %s.\n'
                  'Final shape u_op: %s.\n'
+                 'JSON file: %s.\n'
                  'Final populations:\n%s') % (D_g, kg_pairs, u_op.shape,
+                                              json_file_path,
                                               new_epidemic_npy*age_er_ext))
 
     return json_file_path
