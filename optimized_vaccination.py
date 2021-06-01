@@ -3,6 +3,9 @@ import time
 import datetime
 import json
 import logging
+import logging.handlers
+import threading
+import multiprocessing
 from multiprocessing import Pool
 import numpy as np
 from scipy.optimize import Bounds
@@ -227,6 +230,8 @@ def back_int(S_g, S_vg, S_xg, L_g, beta_gh, beta, T, age_er, mob_av, pop_hat):
 
 
 def ob_fun(x):
+    # logger = logging.getLogger('sub_proc')
+    logger = create_logger()
     start_obj = time.time()
 
     nuf = np.reshape(x, (N_g, N_p, T))
@@ -237,12 +242,14 @@ def ob_fun(x):
 
     elapsed_time = time.time() - start_obj
     elapsed_delta = datetime.timedelta(seconds=elapsed_time)
-    print('Finished ob_fun function. Value: %s. Elapsed time: %s' % (J, elapsed_delta))
+    logger.info('Finished ob_fun function. Value: %s. Elapsed time: %s' % (J, elapsed_delta))
 
     return J
 
 
 def der(x):
+    # logger = logging.getLogger('sub_proc')
+    logger = create_logger()
     start_der = time.time()
 
     nuf = np.reshape(x, (N_g, N_p, T))
@@ -255,12 +262,14 @@ def der(x):
 
     elapsed_time = time.time() - start_der
     elapsed_delta = datetime.timedelta(seconds=elapsed_time)
-    print('Finished der function. Elapsed time: %s' % (elapsed_delta, ))
+    logger.info('Finished der function. Elapsed time: %s' % (elapsed_delta, ))
 
     return dH2
 
 
 def bound_f(bound_full_orig, u_op):
+    # logger = logging.getLogger('sub_proc')
+    logger = create_logger()
     bound_r = np.reshape(bound_full_orig, (N_g, N_p, T))
     S_g, S_vg, S_xg, L_g, D_g, _, _ = sol(u_op, mob_av, beta, beta_gh, T,
                                           pop_hat, age_er, epidemic_npy, False)
@@ -271,7 +280,7 @@ def bound_f(bound_full_orig, u_op):
             for k in range(N_p):
                 if S_g[g, k, i] <= 0:
                     if (g, k) not in kg_pairs:
-                        print('Found KG pair %s at time %s' % ((g, k), i))
+                        logger.info('Found KG pair %s at time %s' % ((g, k), i))
                         bound_r[g, k, i-1] = S_g[g, k, i-1] - L_g[g, k, i-1]*S_g[g, k, i-1]
                         bound_r[g, k, i:T] = 0.0
                         kg_pairs.append((g, k))
@@ -282,6 +291,9 @@ def bound_f(bound_full_orig, u_op):
 
 
 def optimize(epidemic_npy_complete):
+    # logger = logging.getLogger('sub_proc')
+    logger = create_logger()
+
     # number of optimization variables
     N_f = N_g*N_p
 
@@ -289,7 +301,8 @@ def optimize(epidemic_npy_complete):
 
     global epidemic_npy
     epidemic_npy = epidemic_npy_complete
-    print('Current population:\n%s' % (epidemic_npy, ))
+    mult_age_er = age_er.T[:, :, np.newaxis]
+    logger.debug('Current population:\n%s' % (epidemic_npy*mult_age_er, ))
 
     # Constraints
     Af = np.array([]).reshape(T, 0)
@@ -315,7 +328,7 @@ def optimize(epidemic_npy_complete):
 
     init_bounds = Bounds(bound0, bound_full_orig)
 
-    print('Constructed initial bounds.')
+    logger.info('Constructed initial bounds.')
 
     x0 = np.zeros(N_f*T)
     kg_pairs = []
@@ -326,28 +339,28 @@ def optimize(epidemic_npy_complete):
     last_value = np.inf
     while True:
         start_iter = time.time()
-        print(('Starting minimize %d iteration.\n'
-               'KG pairs: %s') % (minimize_iter, kg_pairs))
+        logger.info(('Starting minimize. Iteration: %s.\n'
+                     'KG pairs: %s') % (minimize_iter, kg_pairs))
         res = minimize(ob_fun, u_op, method='SLSQP', jac=der,
                        constraints=[cons], options={'maxiter': 5, 'disp': True},
                        bounds=bounds)
 
-        print('Finished minimize, looking for KG pairs.')
+        logger.info('Finished minimize, looking for KG pairs.')
         u_op = np.reshape(res.x, (N_g, N_p, T))
         bound_full, kg_pairs, D_g = bound_f(bound_full_orig, u_op)
         bounds = Bounds(bound0, bound_full)
 
         elapsed_time = time.time() - start_iter
         elapsed_delta = datetime.timedelta(seconds=elapsed_time)
-        print(('Finished minimize %d iteration.\n'
-               'Elapsed time: %s\n'
-               'Last D_g value: %s\n'
-               'Current D_g value: %s') % (minimize_iter, elapsed_delta,
-                                           last_value, D_g))
+        logger.info(('Finished minimize. Iteration: %s.\n'
+                     'Elapsed time: %s\n'
+                     'Last D_g value: %s\n'
+                     'Current D_g value: %s') % (minimize_iter, elapsed_delta,
+                                                 last_value, D_g))
         minimize_iter += 1
 
         if np.isclose(last_value, D_g):
-            print('Last iteration results converged, breaking.')
+            logger.info('Last iteration results converged, breaking.')
             break
 
         last_value = D_g
@@ -362,16 +375,19 @@ def optimize(epidemic_npy_complete):
                                       epidemic_npy=epidemic_npy,
                                       return_states=True)
 
-    print(('Finished iterations.\n'
-           'Final value: %s.\n'
-           'Final KG pairs: %s.\n'
-           'Final populations:\n%s') % (D_g, kg_pairs, new_epidemic_npy))
+    logger.info(('Finished iterations.\n'
+                 'Final value: %s.\n'
+                 'Final KG pairs: %s.') % (D_g, kg_pairs))
+    logger.debug('Final population:\n%s' % (new_epidemic_npy*mult_age_er, ))
 
     return new_epidemic_npy, u_op, kg_pairs, D_g
 
 
 def full_optimize(r, beta_sim, tau, time_horizon, init_time,
                   total_time, num_age_groups, num_regions):
+    # logger = logging.getLogger('sub_proc')
+    logger = create_logger()
+
     global beta
     beta = beta_sim
 
@@ -384,6 +400,11 @@ def full_optimize(r, beta_sim, tau, time_horizon, init_time,
     global N_p
     N_p = num_regions
 
+    logger.debug(('Getting parameters with:\n'
+                  'beta: %s\n'
+                  't0: %s\n'
+                  'N_g: %s\n'
+                  'N_p: %s') % (beta, t0, N_g, N_p))
     global mob_av, beta_gh, pop_hat, age_er
     mob_av, beta_gh, pop_hat, age_er, rho = get_model_parameters(
                                                 number_age_groups=num_age_groups,
@@ -392,10 +413,11 @@ def full_optimize(r, beta_sim, tau, time_horizon, init_time,
                                                 t0=init_time,
                                                 tau=tau
                                             )
-    print('Got model parameters.')
+    logger.info('Got model parameters.')
 
     # Reading CSV
     csv_name = 'out/epidemic_finland_9.csv'
+    logger.debug('Reading %s for initial state.' % (csv_name, ))
     # Reading CSV
     epidemic_csv = pd.read_csv(csv_name)
     # Getting only date t0
@@ -426,21 +448,22 @@ def full_optimize(r, beta_sim, tau, time_horizon, init_time,
     epidemic_npy = epidemic_npy[ervas_pd_order, :]
 
     # Adding 1 dimension to age_er to do array division
-    age_er_div = age_er[:, :, np.newaxis]
-    # Dividing to get the proportion
-    epidemic_npy = epidemic_npy/age_er_div
+    age_er_ext = age_er.T[:, :, np.newaxis]
 
     # epidemic_npy has num_ervas first, compartmetns have age first
     # Transposing to epidemic_npy to accomodate to compartments
     epidemic_npy = epidemic_npy.transpose(1, 0, 2)
 
+    # Dividing to get the proportion
+    epidemic_npy = epidemic_npy/age_er_ext
+
     initial_epidemic_npy = np.zeros((N_g, N_p, 13))
     initial_epidemic_npy[:, :, :len(select_columns)] = epidemic_npy
-    print('Finished reading inital state.')
+    logger.info('Finished reading inital state.')
 
     global T
     T = time_horizon
-    print('Time horizon for optimizationL %s' % (T, ))
+    logger.info('Time horizon for optimization: %s' % (T, ))
 
     base_name = "R_%s_tau_%s_T_%s" % (r, tau, total_time)
     dir_path = os.path.dirname(os.path.realpath(__file__))
@@ -453,10 +476,10 @@ def full_optimize(r, beta_sim, tau, time_horizon, init_time,
     time_done = 0
     u_total = np.array([]).reshape(N_g, N_p, 0)
     while time_done < total_time:
-        print('Starting optimize at time: %s/%s' % (time_done, total_time))
+        logger.info('Starting optimize at time: %s/%s' % (time_done, total_time))
         epidemic_npy_complete, u_op, kg_pairs, D_g = optimize(epidemic_npy_complete)
         time_done += time_horizon
-        print('Finished optimization, saving results.')
+        logger.info('Finished optimization, saving results.')
 
         u_total = np.concatenate((u_total, u_op), axis=2)
         
@@ -474,10 +497,12 @@ def full_optimize(r, beta_sim, tau, time_horizon, init_time,
 
         np.save(u_op_file_path, u_op)
         np.save(epidemic_file_path, epidemic_npy_complete)
-        print('File written to: %s and %s' % (u_op_file_path, epidemic_file_path))
+        logger.info('File written to: %s and %s' % (u_op_file_path, epidemic_file_path))
 
         with open(json_file_path, 'w', encoding='utf-8') as f:
             json.dump(json_save, f, indent=2)
+
+    logger.info('Finished with total time, obtaining final results.')
 
     D_g, u_op, new_epidemic_npy = sol(u_con=u_total,
                                       mob_av=mob_av,
@@ -507,25 +532,27 @@ def full_optimize(r, beta_sim, tau, time_horizon, init_time,
     with open(json_file_path, 'w', encoding='utf-8') as f:
         json.dump(json_save, f, indent=2)
 
-    print(('Final results obtained.\n'
-           'Complete D_g: %s.\n'
-           'Final KG pairs: %s.\n'
-           'Final shape u_op: %s.\n'
-           'Final populations:\n%s') % (D_g, kg_pairs, u_op.shape,
-                                        new_epidemic_npy*age_er_div))
+    logger.info(('Final results obtained.\n'
+                 'Complete D_g: %s.\n'
+                 'Final KG pairs: %s.\n'
+                 'Final shape u_op: %s.\n'
+                 'Final populations:\n%s') % (D_g, kg_pairs, u_op.shape,
+                                              new_epidemic_npy*age_er_ext))
 
     return json_file_path
 
 
-def run_optimize(r, tau, beta_sim, time_horizon, init_time, total_time):
+def run_optimize(log_q, r, tau, beta_sim, time_horizon, init_time, total_time):
+    # qh = logging.handlers.QueueHandler(log_q)
+    # logger = logging.getLogger('sub_proc')
+    # logger.addHandler(qh)
+    logger = create_logger()
     try:
         start_time = time.time()
-        proc_number = os.getpid()
-        print('Starting (%s). R: %s. Tau: %s. T: %s. T0: %s' % (proc_number,
-                                                                r,
-                                                                tau,
-                                                                total_time,
-                                                                init_time))
+        logger.info('Starting. R: %s. Tau: %s. T: %s. T0: %s' % (r,
+                                                                 tau,
+                                                                 total_time,
+                                                                 init_time))
 
         filename = full_optimize(r=r,
                                  beta_sim=beta_sim,
@@ -538,29 +565,114 @@ def run_optimize(r, tau, beta_sim, time_horizon, init_time, total_time):
 
         elapsed_time = time.time() - start_time
         elapsed_delta = datetime.timedelta(seconds=elapsed_time)
-        print('Finished (%s). R: %s. Tau: %s. T: %s. T0: %s. Time: %s' % (proc_number,
-                                                                          r,
-                                                                          tau,
-                                                                          total_time,
-                                                                          init_time,
-                                                                          elapsed_delta))
+        logger.info('Finished. R: %s. Tau: %s. T: %s. T0: %s. Time: %s' % (r,
+                                                                           tau,
+                                                                           total_time,
+                                                                           init_time,
+                                                                           elapsed_delta))
 
         return filename
     except Exception:
-        logger = logging.getLogger()
-        numeric_log_level = getattr(logging, "DEBUG", None)
-        logging.basicConfig(
-            format='%(asctime)s %(levelname)s: %(message)s',
-            datefmt='%d/%m/%Y %H:%M:%S %p',
-            level=numeric_log_level,
-            handlers=[logging.StreamHandler()]
-        )
-        logger.exception("Something went wrong in optimization: %s" % (filename, ))
-        print("Something went wrong in optimization: %s" % (filename, ))
+        logger.exception(('Something went wrong in optimization.\n'
+                          'R: %s. Tau: %s. T: %s. T0: %s') % (r,
+                                                              tau,
+                                                              total_time,
+                                                              init_time))
         return None
 
 
+def logger_thread(log_q):
+    while True:
+        record = log_q.get()
+        if record is None:
+            break
+        logger = logging.getLogger(record.name)
+        logger.handle(record)
+
+
+def create_logger():
+    logger = multiprocessing.get_logger()
+    logger.setLevel(logging.INFO)
+    formatter = logging.Formatter(
+        fmt='%(asctime)s %(levelname)s %(processName)s: %(message)s',
+        datefmt='%m/%d/%Y %H:%M:%S %p'
+    )
+    handler_file = logging.handlers.RotatingFileHandler(
+                    'optimized_vaccination.log',
+                    maxBytes=1e6,
+                    backupCount=3
+                    )
+    handler_console = logging.StreamHandler()
+    handler_file.setFormatter(formatter)
+    handler_console.setFormatter(formatter)
+
+    # this bit will make sure you won't have 
+    # duplicated messages in the output
+    if not len(logger.handlers):
+        logger.addHandler(handler_file)
+    
+    if len(logger.handlers) == 1:
+        logger.addHandler(handler_console)
+
+    return logger
+
+
 def run_parallel_optimizations():
+    logging_dict = {
+        'version': 1,
+        'formatters': {
+            'detailed': {
+                'class': 'logging.Formatter',
+                'format': '%(asctime)s %(processName)s %(levelname)s: %(message)s',
+                'formatTime': '%m/%d/%Y %H:%M:%S %p'
+            },
+            'default': {
+                'class': 'logging.Formatter',
+                'format': '%(asctime)s %(processName)s %(levelname)s: %(message)s',
+                'formatTime': '%m/%d/%Y %H:%M:%S %p'
+            }
+        },
+        'handlers': {
+            'console_main': {
+                'class': 'logging.StreamHandler',
+                'formatter': 'default',
+                'level': 'INFO',
+            },
+            'file_main': {
+                'class': 'logging.handlers.RotatingFileHandler',
+                'filename': 'optimized_vaccination.log',
+                'maxBytes': 1e6,
+                'backupCount': 3,
+                'formatter': 'default',
+                'level': 'DEBUG'
+            },
+            'console_proc': {
+                'class': 'logging.StreamHandler',
+                'formatter': 'detailed',
+                'level': 'INFO',
+            },
+            'file_proc': {
+                'class': 'logging.handlers.RotatingFileHandler',
+                'filename': 'optimized_vaccination.log',
+                'maxBytes': 1e6,
+                'backupCount': 3,
+                'formatter': 'detailed',
+                'level': 'DEBUG'
+            }
+        },
+        'loggers': {
+            'main_proc': {
+                'handlers': ['console_main', 'file_main']
+            },
+            'sub_proc': {
+                'handlers': ['console_proc', 'file_proc']
+            }
+        }
+    }
+    # logging.config.dictConfig(logging_dict)
+    # logger = logging.getLogger('main_proc')
+    logger = create_logger()
+    logger.info('Logger for optimized_vaccination configured.')
     # all_experiments = [
     #     (0.75,  0.,  0.016577192790495632),
     #     (0.75,  0.5,  0.017420081058752156),
@@ -576,17 +688,24 @@ def run_parallel_optimizations():
     #     (1.5,  1.0,  0.03559801015581483),
     # ]
     all_experiments = [
-        (1.5,  0.5,  0.03484016211750431, 80, '2021-04-18', 115),
+        (1.5,  0.5,  0.03484016211750431, 10, '2021-04-18', 25),
     ]
+    logger.info('Experiments:\n%s' % (all_experiments, ))
     num_cpus = os.cpu_count()
     start_time = time.time()
     num_experiments = len(all_experiments)
     result_filenames = []
-    print('Running %s experiments with %s CPUS.' % (num_experiments, num_cpus))
+
+    logger.info('Running %s experiments with %s CPUS.' % (num_experiments, num_cpus))
+    
+    log_q = multiprocessing.Manager().Queue()
+    lp = threading.Thread(target=logger_thread, args=(log_q,))
+    lp.start()
+
     with Pool(processes=num_cpus) as pool:
         # Calling the function to execute simulations in asynchronous way
         async_res = [pool.apply_async(func=run_optimize,
-                                      args=(r, tau, beta_sim,
+                                      args=(log_q, r, tau, beta_sim,
                                             time_horizon, init_time, total_time))
                      for r, tau, beta_sim,
                      time_horizon, init_time, total_time in all_experiments]
@@ -595,10 +714,14 @@ def run_parallel_optimizations():
         for res in async_res:
             filename = res.get()
             result_filenames.append(filename)
+
     elapsed_time = time.time() - start_time
     elapsed_delta = datetime.timedelta(seconds=elapsed_time)
-    print('Finished experiments. Elapsed: %s' % (elapsed_delta, ))
-    print('Resulting filenames: %s' % (result_filenames, ))
+    logger.info('Finished experiments. Elapsed: %s' % (elapsed_delta, ))
+    logger.info('Resulting filenames: %s' % (result_filenames, ))
+
+    log_q.put(None)
+    lp.join()
 
 
 if __name__ == "__main__":
