@@ -291,7 +291,7 @@ def log_out_minimize(minimize_result):
                   '\tCurrent function value: %(value)s\n'
                   '\tIterations: %(iter)s\n'
                   '\tFunction evaluations: %(evals)s\n'
-                  '\tGradient evaluations: %(grad)s\n') % ({
+                  '\tGradient evaluations: %(grad)s') % ({
                     'message': minimize_result.message,
                     'status': minimize_result.status,
                     'value': minimize_result.fun,
@@ -394,12 +394,9 @@ def optimize(epidemic_npy_complete):
     return new_epidemic_npy, u_op, kg_pairs, D_g
 
 
-def full_optimize(r, beta_sim, tau, time_horizon, init_time,
+def full_optimize(r, tau, time_horizon, init_time,
                   total_time, num_age_groups, num_regions):
     logger = create_logger()
-
-    global beta
-    beta = beta_sim
 
     global t0
     t0 = init_time
@@ -411,10 +408,11 @@ def full_optimize(r, beta_sim, tau, time_horizon, init_time,
     N_p = num_regions
 
     logger.debug(('Getting parameters with:\n'
-                  'beta: %s\n'
+                  'R: %s\n'
+                  'tau: %s\n'
                   't0: %s\n'
                   'N_g: %s\n'
-                  'N_p: %s') % (beta, t0, N_g, N_p))
+                  'N_p: %s') % (r, tau, t0, N_g, N_p))
     global mob_av, beta_gh, pop_hat, age_er
     mob_av, beta_gh, pop_hat, age_er, rho = get_model_parameters(
                                                 number_age_groups=num_age_groups,
@@ -423,7 +421,10 @@ def full_optimize(r, beta_sim, tau, time_horizon, init_time,
                                                 t0=init_time,
                                                 tau=tau
                                             )
-    logger.info('Got model parameters.')
+    global beta
+    beta = r/rho
+
+    logger.info('Got model parameters.\nBeta: %s' % (beta, ))
 
     # Reading CSV
     csv_name = 'out/epidemic_finland_9.csv'
@@ -473,7 +474,7 @@ def full_optimize(r, beta_sim, tau, time_horizon, init_time,
 
     global T
     T = time_horizon
-    logger.info('Time horizon for optimization: %s' % (T, ))
+    logger.info('Time horizon for optimizations: %s' % (T, ))
 
     base_name = "R_%s_tau_%s_T_%s" % (r, tau, total_time)
     dir_path = os.path.dirname(os.path.realpath(__file__))
@@ -554,7 +555,7 @@ def full_optimize(r, beta_sim, tau, time_horizon, init_time,
     return json_file_path
 
 
-def run_optimize(r, tau, beta_sim, time_horizon, init_time, total_time):
+def run_optimize(r, tau, time_horizon, init_time, total_time):
     logger = create_logger()
     try:
         start_time = time.time()
@@ -564,7 +565,6 @@ def run_optimize(r, tau, beta_sim, time_horizon, init_time, total_time):
                                                                  init_time))
 
         filename = full_optimize(r=r,
-                                 beta_sim=beta_sim,
                                  tau=tau,
                                  time_horizon=time_horizon,
                                  init_time=init_time,
@@ -635,7 +635,7 @@ def run_parallel_optimizations():
     #     (1.5,  1.0,  0.03559801015581483),
     # ]
     all_experiments = [
-        (1.5,  0.5,  0.03484016211750431, 10, '2021-04-18', 25),
+        (1.5,  0.5,  10, '2021-04-18', 25),
     ]
     logger.info('optimized_vaccination experiments:\n%s' % (all_experiments, ))
 
@@ -647,9 +647,9 @@ def run_parallel_optimizations():
     with Pool(processes=num_cpus) as pool:
         # Calling the function to execute simulations in asynchronous way
         async_res = [pool.apply_async(func=run_optimize,
-                                      args=(r, tau, beta_sim,
+                                      args=(r, tau,
                                             time_horizon, init_time, total_time))
-                     for r, tau, beta_sim,
+                     for r, tau,
                      time_horizon, init_time, total_time in all_experiments]
 
         # Waiting for the values of the async execution
