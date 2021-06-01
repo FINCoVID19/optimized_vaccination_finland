@@ -4,7 +4,6 @@ import datetime
 import json
 import logging
 import logging.handlers
-import threading
 import multiprocessing
 from multiprocessing import Pool
 import numpy as np
@@ -287,6 +286,22 @@ def bound_f(bound_full_orig, u_op):
     return bound_rf, kg_pairs, D_g
 
 
+def log_out_minimize(minimize_result):
+    result_str = ('%(message)s\t(Exit mode %(status)s)\n'
+                  '\tCurrent function value: %(value)s\n'
+                  '\tIterations: %(iter)s\n'
+                  '\tFunction evaluations: %(evals)s\n'
+                  '\tGradient evaluations: %(grad)s\n') % ({
+                    'message': minimize_result.message,
+                    'status': minimize_result.status,
+                    'value': minimize_result.fun,
+                    'evals': minimize_result.nfev,
+                    'grad': minimize_result.njev,
+                    'iter': minimize_result.nit,
+                  })
+    return result_str
+
+
 def optimize(epidemic_npy_complete):
     logger = create_logger()
 
@@ -338,10 +353,10 @@ def optimize(epidemic_npy_complete):
         logger.info(('Starting minimize. Iteration: %s.\n'
                      'KG pairs: %s') % (minimize_iter, kg_pairs))
         res = minimize(ob_fun, u_op, method='SLSQP', jac=der,
-                       constraints=[cons], options={'maxiter': 5, 'disp': True},
+                       constraints=[cons], options={'maxiter': 5},
                        bounds=bounds)
 
-        logger.info('Finished minimize, looking for KG pairs.')
+        logger.info('Finished minimize:\n%s\nLooking for KG pairs.' % (log_out_minimize(res), ))
         u_op = np.reshape(res.x, (N_g, N_p, T))
         bound_full, kg_pairs, D_g = bound_f(bound_full_orig, u_op)
         bounds = Bounds(bound0, bound_full)

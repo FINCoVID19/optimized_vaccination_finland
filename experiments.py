@@ -61,7 +61,7 @@ def get_experiments_results(num_age_groups, num_ervas, e, taus, u_offset,
                 # ws is None mean go to optimized strategy
                 if type(ws) is not list:
                     dir_path = os.path.dirname(os.path.realpath(__file__))
-                    u_op_file = 'R_%s_op_sol_tau%s.npy' % (r, tau)
+                    u_op_file = 'R_%s_tau_%s_T_%s_u_op.npy' % (r, tau, T)
                     u_op_file_path = os.path.join(dir_path, 'out', u_op_file)
                     if os.path.isfile(u_op_file_path):
                         exec_experiment = True
