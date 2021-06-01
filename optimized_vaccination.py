@@ -230,7 +230,6 @@ def back_int(S_g, S_vg, S_xg, L_g, beta_gh, beta, T, age_er, mob_av, pop_hat):
 
 
 def ob_fun(x):
-    # logger = logging.getLogger('sub_proc')
     logger = create_logger()
     start_obj = time.time()
 
@@ -248,7 +247,6 @@ def ob_fun(x):
 
 
 def der(x):
-    # logger = logging.getLogger('sub_proc')
     logger = create_logger()
     start_der = time.time()
 
@@ -268,7 +266,6 @@ def der(x):
 
 
 def bound_f(bound_full_orig, u_op):
-    # logger = logging.getLogger('sub_proc')
     logger = create_logger()
     bound_r = np.reshape(bound_full_orig, (N_g, N_p, T))
     S_g, S_vg, S_xg, L_g, D_g, _, _ = sol(u_op, mob_av, beta, beta_gh, T,
@@ -291,7 +288,6 @@ def bound_f(bound_full_orig, u_op):
 
 
 def optimize(epidemic_npy_complete):
-    # logger = logging.getLogger('sub_proc')
     logger = create_logger()
 
     # number of optimization variables
@@ -385,7 +381,6 @@ def optimize(epidemic_npy_complete):
 
 def full_optimize(r, beta_sim, tau, time_horizon, init_time,
                   total_time, num_age_groups, num_regions):
-    # logger = logging.getLogger('sub_proc')
     logger = create_logger()
 
     global beta
@@ -542,10 +537,7 @@ def full_optimize(r, beta_sim, tau, time_horizon, init_time,
     return json_file_path
 
 
-def run_optimize(log_q, r, tau, beta_sim, time_horizon, init_time, total_time):
-    # qh = logging.handlers.QueueHandler(log_q)
-    # logger = logging.getLogger('sub_proc')
-    # logger.addHandler(qh)
+def run_optimize(r, tau, beta_sim, time_horizon, init_time, total_time):
     logger = create_logger()
     try:
         start_time = time.time()
@@ -581,15 +573,6 @@ def run_optimize(log_q, r, tau, beta_sim, time_horizon, init_time, total_time):
         return None
 
 
-def logger_thread(log_q):
-    while True:
-        record = log_q.get()
-        if record is None:
-            break
-        logger = logging.getLogger(record.name)
-        logger.handle(record)
-
-
 def create_logger():
     logger = multiprocessing.get_logger()
     logger.setLevel(logging.INFO)
@@ -618,59 +601,6 @@ def create_logger():
 
 
 def run_parallel_optimizations():
-    logging_dict = {
-        'version': 1,
-        'formatters': {
-            'detailed': {
-                'class': 'logging.Formatter',
-                'format': '%(asctime)s %(processName)s %(levelname)s: %(message)s',
-                'formatTime': '%m/%d/%Y %H:%M:%S %p'
-            },
-            'default': {
-                'class': 'logging.Formatter',
-                'format': '%(asctime)s %(processName)s %(levelname)s: %(message)s',
-                'formatTime': '%m/%d/%Y %H:%M:%S %p'
-            }
-        },
-        'handlers': {
-            'console_main': {
-                'class': 'logging.StreamHandler',
-                'formatter': 'default',
-                'level': 'INFO',
-            },
-            'file_main': {
-                'class': 'logging.handlers.RotatingFileHandler',
-                'filename': 'optimized_vaccination.log',
-                'maxBytes': 1e6,
-                'backupCount': 3,
-                'formatter': 'default',
-                'level': 'DEBUG'
-            },
-            'console_proc': {
-                'class': 'logging.StreamHandler',
-                'formatter': 'detailed',
-                'level': 'INFO',
-            },
-            'file_proc': {
-                'class': 'logging.handlers.RotatingFileHandler',
-                'filename': 'optimized_vaccination.log',
-                'maxBytes': 1e6,
-                'backupCount': 3,
-                'formatter': 'detailed',
-                'level': 'DEBUG'
-            }
-        },
-        'loggers': {
-            'main_proc': {
-                'handlers': ['console_main', 'file_main']
-            },
-            'sub_proc': {
-                'handlers': ['console_proc', 'file_proc']
-            }
-        }
-    }
-    # logging.config.dictConfig(logging_dict)
-    # logger = logging.getLogger('main_proc')
     logger = create_logger()
     logger.info('Logger for optimized_vaccination configured.')
     # all_experiments = [
@@ -690,22 +620,17 @@ def run_parallel_optimizations():
     all_experiments = [
         (1.5,  0.5,  0.03484016211750431, 10, '2021-04-18', 25),
     ]
-    logger.info('Experiments:\n%s' % (all_experiments, ))
+    logger.info('optimized_vaccination experiments:\n%s' % (all_experiments, ))
+
     num_cpus = os.cpu_count()
     start_time = time.time()
     num_experiments = len(all_experiments)
     result_filenames = []
-
     logger.info('Running %s experiments with %s CPUS.' % (num_experiments, num_cpus))
-    
-    log_q = multiprocessing.Manager().Queue()
-    lp = threading.Thread(target=logger_thread, args=(log_q,))
-    lp.start()
-
     with Pool(processes=num_cpus) as pool:
         # Calling the function to execute simulations in asynchronous way
         async_res = [pool.apply_async(func=run_optimize,
-                                      args=(log_q, r, tau, beta_sim,
+                                      args=(r, tau, beta_sim,
                                             time_horizon, init_time, total_time))
                      for r, tau, beta_sim,
                      time_horizon, init_time, total_time in all_experiments]
@@ -719,9 +644,6 @@ def run_parallel_optimizations():
     elapsed_delta = datetime.timedelta(seconds=elapsed_time)
     logger.info('Finished experiments. Elapsed: %s' % (elapsed_delta, ))
     logger.info('Resulting filenames: %s' % (result_filenames, ))
-
-    log_q.put(None)
-    lp.join()
 
 
 if __name__ == "__main__":
