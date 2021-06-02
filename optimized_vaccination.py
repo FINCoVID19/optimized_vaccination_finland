@@ -455,9 +455,11 @@ def full_optimize(r, tau, time_horizon, init_time,
 
     base_name = "R_%s_tau_%s_T_%s" % (r, tau, total_time)
     dir_path = os.path.dirname(os.path.realpath(__file__))
+    results_path = os.path.join(dir_path, 'out', 'results_optim')
+    os.makedirs(results_path, exist_ok=True)
 
     json_file = "%s.json" % (base_name, )
-    json_file_path = os.path.join(dir_path, 'out', json_file)
+    json_file_path = os.path.join(results_path, json_file)
 
     epidemic_npy_complete = initial_epidemic_npy
     json_save = {}
@@ -475,8 +477,8 @@ def full_optimize(r, tau, time_horizon, init_time,
         u_op_filename = '%s_%s_u_op.npy' % (base_name, time_done)
         epidemic_npy_filename = '%s_%s_epidemic.npy' % (base_name, time_done)
         
-        u_op_file_path = os.path.join(dir_path, 'out', u_op_filename)
-        epidemic_file_path = os.path.join(dir_path, 'out', epidemic_npy_filename)
+        u_op_file_path = os.path.join(results_path, u_op_filename)
+        epidemic_file_path = os.path.join(results_path, epidemic_npy_filename)
 
         json_save[time_done]['u_op'] = u_op_file_path
         json_save[time_done]['epidemic'] = epidemic_file_path
@@ -506,11 +508,11 @@ def full_optimize(r, tau, time_horizon, init_time,
                                       epidemic_npy=initial_epidemic_npy,
                                       return_states=True)
     u_op_filename = '%s_u_op.npy' % (base_name, )
-    u_op_file_path = os.path.join(dir_path, 'out', u_op_filename)
+    u_op_file_path = os.path.join(results_path, u_op_filename)
     initial_epi_filename = '%s_initial_epidemic.npy' % (base_name, )
-    initial_epi_file_path = os.path.join(dir_path, 'out', initial_epi_filename)
+    initial_epi_file_path = os.path.join(results_path, initial_epi_filename)
     final_epi_filename = '%s_final_epidemic.npy' % (base_name, )
-    final_epi_file_path = os.path.join(dir_path, 'out', final_epi_filename)
+    final_epi_file_path = os.path.join(results_path, final_epi_filename)
     np.save(u_op_file_path, u_op)
     np.save(initial_epi_file_path, initial_epidemic_npy)
     np.save(final_epi_file_path, new_epidemic_npy)
