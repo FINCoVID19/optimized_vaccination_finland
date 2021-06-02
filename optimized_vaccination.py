@@ -377,7 +377,8 @@ def optimize(epidemic_npy_complete):
                                                  last_values[-3:], D_d))
         minimize_iter += 1
 
-        if np.allclose(last_values[-3:], D_d):
+        # Tolerance to 3 decimal places
+        if np.allclose(last_values[-3:], D_d, rtol=0, atol=1e-3):
             logger.info('Last iterations results converged, breaking.')
             break
 
