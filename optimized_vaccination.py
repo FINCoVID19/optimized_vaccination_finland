@@ -9,7 +9,6 @@ from multiprocessing import Pool
 import numpy as np
 from scipy.optimize import Bounds
 from scipy.optimize import minimize
-import pandas as pd
 from env_var import EPIDEMIC
 from forward_integration import get_model_parameters, read_initial_values
 
@@ -239,10 +238,10 @@ def ob_fun(x):
     start_obj = time.time()
 
     nuf = np.reshape(x, (N_g, N_p, T))
-    S_g, S_vg, S_xg, L_g, D_g, _, _ = sol(nuf, mob_av, beta, beta_gh, T,
+    S_g, S_vg, S_xg, L_g, D_d, _, _ = sol(nuf, mob_av, beta, beta_gh, T,
                                           pop_hat, age_er, epidemic_npy, False)
 
-    J = (D_g)
+    J = (D_d)
 
     elapsed_time = time.time() - start_obj
     elapsed_delta = datetime.timedelta(seconds=elapsed_time)
@@ -273,7 +272,7 @@ def der(x):
 def bound_f(bound_full_orig, u_op):
     logger = create_logger()
     bound_r = np.reshape(bound_full_orig, (N_g, N_p, T))
-    S_g, S_vg, S_xg, L_g, D_g, _, _ = sol(u_op, mob_av, beta, beta_gh, T,
+    S_g, S_vg, S_xg, L_g, D_d, _, _ = sol(u_op, mob_av, beta, beta_gh, T,
                                           pop_hat, age_er, epidemic_npy, False)
 
     kg_pairs = []
@@ -289,7 +288,7 @@ def bound_f(bound_full_orig, u_op):
 
     bound_rf = np.reshape(bound_r, N_g*N_p*T)
 
-    return bound_rf, kg_pairs, D_g
+    return bound_rf, kg_pairs, D_d
 
 
 def log_out_minimize(minimize_result):
@@ -364,25 +363,27 @@ def optimize(epidemic_npy_complete):
 
         logger.info('minimize done:\n%s\nLooking for KG pairs.' % (log_out_minimize(res), ))
         u_op = np.reshape(res.x, (N_g, N_p, T))
-        bound_full, kg_pairs, D_g = bound_f(bound_full_orig, u_op)
+        bound_full, kg_pairs, D_d = bound_f(bound_full_orig, u_op)
         bounds = Bounds(bound0, bound_full)
 
         elapsed_time = time.time() - start_iter
         elapsed_delta = datetime.timedelta(seconds=elapsed_time)
         logger.info(('Finished minimize. Iteration: %s.\n'
                      'Elapsed time: %s\n'
-                     'Last D_g values: %s\n'
-                     'Current D_g value: %s') % (minimize_iter, elapsed_delta,
-                                                 last_values[-3:], D_g))
+                     'KG pairs: %s\n'
+                     'Last D_d values: %s\n'
+                     'Current D_d value: %s') % (minimize_iter, elapsed_delta,
+                                                 kg_pairs,
+                                                 last_values[-3:], D_d))
         minimize_iter += 1
 
-        if np.allclose(last_values[-3:], D_g):
+        if np.allclose(last_values[-3:], D_d):
             logger.info('Last iterations results converged, breaking.')
             break
 
-        last_values = np.concatenate((last_values, [D_g]))
+        last_values = np.concatenate((last_values, [D_d]))
 
-    D_g, u_op, new_epidemic_npy = sol(u_con=u_op,
+    D_d, u_op, new_epidemic_npy = sol(u_con=u_op,
                                       mob_av=mob_av,
                                       beta=beta,
                                       beta_gh=beta_gh,
@@ -394,13 +395,13 @@ def optimize(epidemic_npy_complete):
 
     logger.info(('Finished iterations.\n'
                  'value: %s.\n'
-                 'KG pairs: %s.') % (D_g, kg_pairs))
+                 'KG pairs: %s.') % (D_d, kg_pairs))
     logger.debug('Population:\n%s' % (new_epidemic_npy*mult_age_er, ))
     u_op_day = u_op*mult_age_er
     u_op_day = u_op_day.sum(axis=(0, 1))
     logger.debug('Vaccination/day:\n%s' % (u_op_day, ))
 
-    return new_epidemic_npy, u_op, kg_pairs, D_g
+    return new_epidemic_npy, u_op, kg_pairs, D_d
 
 
 def full_optimize(r, tau, time_horizon, init_time,
@@ -463,7 +464,7 @@ def full_optimize(r, tau, time_horizon, init_time,
     u_total = np.array([]).reshape(N_g, N_p, 0)
     while time_done < total_time:
         logger.info('Starting optimize at time: %s/%s' % (time_done, total_time))
-        epidemic_npy_complete, u_op, kg_pairs, D_g = optimize(epidemic_npy_complete)
+        epidemic_npy_complete, u_op, kg_pairs, D_d = optimize(epidemic_npy_complete)
         time_done += time_horizon
         logger.info('Finished optimization, saving results.')
 
@@ -478,7 +479,7 @@ def full_optimize(r, tau, time_horizon, init_time,
 
         json_save[time_done]['u_op'] = u_op_file_path
         json_save[time_done]['epidemic'] = epidemic_file_path
-        json_save[time_done]['D_g'] = D_g
+        json_save[time_done]['D_d'] = D_d
         json_save[time_done]['kg_pairs'] = kg_pairs
 
         np.save(u_op_file_path, u_op)
@@ -490,7 +491,11 @@ def full_optimize(r, tau, time_horizon, init_time,
 
     logger.info('All times finished, obtaining final results.')
 
-    D_g, u_op, new_epidemic_npy = sol(u_con=u_total,
+    u_op_day = u_total*age_er_ext
+    u_op_day = u_op_day.sum(axis=(0, 1))
+    logger.debug('u_total vaccination/day:\n%s' % (u_op_day, ))
+
+    D_d, u_op, new_epidemic_npy = sol(u_con=u_total,
                                       mob_av=mob_av,
                                       beta=beta,
                                       beta_gh=beta_gh,
@@ -512,17 +517,17 @@ def full_optimize(r, tau, time_horizon, init_time,
     json_save['initial_epidemic'] = initial_epi_file_path
     json_save['u_op'] = u_op_file_path
     json_save['final_epidemic'] = final_epi_file_path
-    json_save['D_g'] = D_g
+    json_save['D_d'] = D_d
     json_save['kg_pairs'] = kg_pairs
 
     with open(json_file_path, 'w', encoding='utf-8') as f:
         json.dump(json_save, f, indent=2)
 
     logger.info(('Final results obtained.\n'
-                 'Complete D_g: %s.\n'
+                 'Complete D_d: %s.\n'
                  'Final KG pairs: %s.\n'
                  'Final shape u_op: %s.\n'
-                 'JSON file: %s.') % (D_g, kg_pairs, u_op.shape,
+                 'JSON file: %s.') % (D_d, kg_pairs, u_op.shape,
                                       json_file_path))
     logger.debug('Final populations:\n%s' % (new_epidemic_npy*age_er_ext, ))
     u_op_day = u_op*age_er_ext
@@ -576,8 +581,8 @@ def create_logger():
     )
     handler_file = logging.handlers.RotatingFileHandler(
                     'optimized_vaccination.log',
-                    maxBytes=1e6,
-                    backupCount=3
+                    maxBytes=100e6,
+                    backupCount=5
                     )
     handler_console = logging.StreamHandler()
     handler_file.setFormatter(formatter)
@@ -598,18 +603,19 @@ def run_parallel_optimizations():
     logger = create_logger()
     logger.info('Logger for optimized_vaccination configured.')
     all_experiments = [
-        (0.75,  0.,     40, '2021-04-18', 115),
-        (0.75,  0.5,    40, '2021-04-18', 115),
-        (0.75,  1.0,    40, '2021-04-18', 115),
-        (1.0,   0.,     40, '2021-04-18', 115),
-        (1.0,   0.5,    40, '2021-04-18', 115),
-        (1.0,   1.0,    40, '2021-04-18', 115),
-        (1.25,  0.,     40, '2021-04-18', 115),
-        (1.25,  0.5,    40, '2021-04-18', 115),
-        (1.25,  1.0,    40, '2021-04-18', 115),
-        (1.5,   0.,     40, '2021-04-18', 115),
-        (1.5,   0.5,    40, '2021-04-18', 115),
-        (1.5,   1.0,    40, '2021-04-18', 115),
+        # (0.75,  0.,     40, '2021-04-18', 115),
+        # (0.75,  0.5,    40, '2021-04-18', 115),
+        # (0.75,  1.0,    40, '2021-04-18', 115),
+        # (1.0,   0.,     40, '2021-04-18', 115),
+        # (1.0,   0.5,    40, '2021-04-18', 115),
+        # (1.0,   1.0,    40, '2021-04-18', 115),
+        # (1.25,  0.,     40, '2021-04-18', 115),
+        # (1.25,  0.5,    40, '2021-04-18', 115),
+        # (1.25,  1.0,    40, '2021-04-18', 115),
+        # (1.5,   0.,     40, '2021-04-18', 115),
+        # (1.5,   0.5,    40, '2021-04-18', 115),
+        # (1.5,   1.0,    40, '2021-04-18', 115),
+        (1.5,   1.0,    10, '2021-04-18', 25),
     ]
     logger.info('optimized_vaccination experiments:\n%s' % (all_experiments, ))
 
