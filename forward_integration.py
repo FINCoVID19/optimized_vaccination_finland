@@ -10,7 +10,7 @@ from env_var import EPIDEMIC
 
 
 def forward_integration(u_con, c1, beta, c_gh, T, pop_hat, age_er,
-                        t0, ws_vacc, e, epidemic_npy, init_vacc, checks=True,
+                        t0, ws_vacc, e, epidemic_npy, init_vacc, checks=False,
                         u_op_file=None):
     # number of age groups and ervas
     num_regions, num_age_groups = age_er.shape
@@ -229,7 +229,7 @@ def forward_integration(u_con, c1, beta, c_gh, T, pop_hat, age_er,
     hospitalized_incidence[:, :, T-1] = T_q1*Q_1g[:, :, T-1]
     infections_incidence[:, :, T-1] = T_E*E_g[:, :, T-1]
 
-    if checks and u_op_file is not None:
+    if checks:
         # Final check to see that we always vaccinate u_con people
         u_final = u*age_er.T[:, :, np.newaxis]
         u_final = u_final.sum(axis=0)

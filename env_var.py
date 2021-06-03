@@ -150,7 +150,7 @@ EXPERIMENTS = {
     'simulate_T': 115,
     'r_effs': [0.75, 1.0, 1.25, 1.5],
     'init_vacc': True,
-    'taus': [0, 0.5, 1],
+    'taus': [0.0, 0.5, 1.0],
     'num_ervas': 5,
     'num_age_groups': 9,
     'strategies': [
