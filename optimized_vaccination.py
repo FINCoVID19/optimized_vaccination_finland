@@ -9,7 +9,7 @@ from multiprocessing import Pool
 import numpy as np
 from scipy.optimize import Bounds
 from scipy.optimize import minimize
-from env_var import EPIDEMIC
+from env_var import EPIDEMIC, EXPERIMENTS
 from forward_integration import get_model_parameters, read_initial_values
 
 
@@ -615,26 +615,20 @@ def create_logger():
 def run_parallel_optimizations():
     logger = create_logger()
     logger.info('Logger for optimized_vaccination configured.')
-    time_horizon = 115
-    init_time = '2021-04-18'
-    total_time = 115
     # time_horizon = 10
     # init_time = '2021-04-18'
     # total_time = 25
-    all_experiments = [
-        (0.75,  0.),
-        (0.75,  0.5),
-        (0.75,  1.0),
-        (1.0,   0.),
-        (1.0,   0.5),
-        (1.0,   1.0),
-        (1.25,  0.),
-        (1.25,  0.5),
-        (1.25,  1.0),
-        (1.5,   0.),
-        (1.5,   0.5),
-        (1.5,   1.0),
-    ]
+    # all_experiments = [(1.5,   1.0), ]
+
+    time_horizon = EXPERIMENTS['simulate_T']
+    init_time = EXPERIMENTS['t0']
+    total_time = EXPERIMENTS['simulate_T']
+    taus = EXPERIMENTS['taus']
+    r_experiments = EXPERIMENTS['r_effs']
+    all_experiments = []
+    for tau in taus:
+        for r in r_experiments:
+            all_experiments.append((r, tau))
     logger.info('optimized_vaccination experiments:\n%s' % (all_experiments, ))
 
     num_cpus = os.cpu_count()
