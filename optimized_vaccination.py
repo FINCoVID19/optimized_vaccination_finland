@@ -2,6 +2,7 @@ import os
 import time
 import datetime
 import json
+import multiprocessing
 from multiprocessing import Pool
 import numpy as np
 from scipy.optimize import Bounds
@@ -533,6 +534,7 @@ def full_optimize(r, tau, time_horizon, init_time,
 
 
 def run_optimize(r, tau, time_horizon, init_time, total_time):
+    multiprocessing.current_process().name = 'WorkerFor-R_%s-Tau_%s' % (r, tau)
     logger = create_logger()
     try:
         start_time = time.time()
