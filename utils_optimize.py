@@ -1,6 +1,9 @@
+import sys
 import logging
 import logging.handlers
 import multiprocessing
+import argparse
+from env_var import EXPERIMENTS
 
 
 def log_out_minimize(minimize_result):
@@ -19,9 +22,9 @@ def log_out_minimize(minimize_result):
     return result_str
 
 
-def create_logger():
+def create_logger(log_level=logging.DEBUG):
     logger = multiprocessing.get_logger()
-    logger.setLevel(logging.DEBUG)
+    logger.setLevel(log_level)
     formatter = logging.Formatter(
         fmt='%(asctime)s %(levelname)s %(processName)s: %(message)s',
         datefmt='%m/%d/%Y %H:%M:%S %p'
@@ -44,3 +47,45 @@ def create_logger():
         logger.addHandler(handler_console)
 
     return logger
+
+
+def parse_args(args=sys.argv[1:]):
+    parser = argparse.ArgumentParser(
+        formatter_class=argparse.ArgumentDefaultsHelpFormatter,
+        description="Get an optimized vaccination strategy."
+    )
+
+    parser.add_argument('--r_experiments', type=float, nargs='+',
+                        default=EXPERIMENTS['r_effs'],
+                        help='List of R_effs to run the experiments.')
+
+    parser.add_argument('--taus', type=float, nargs='+',
+                        default=EXPERIMENTS['taus'],
+                        help='List of taus to run the experiments.')
+
+    parser.add_argument('--t0', type=str,
+                        default=EXPERIMENTS['t0'],
+                        help='Initial date to run the experiments.')
+
+    parser.add_argument('--T', type=int,
+                        default=EXPERIMENTS['simulate_T'],
+                        help='Time horizon to run the experiments.')
+
+    parser.add_argument('--part_time', type=int,
+                        default=EXPERIMENTS['simulate_T'],
+                        help=('The total time horizon is going to be divided'
+                              ' in  batches part_time days.'))
+
+    parser.add_argument('--max_execution_hours', type=int,
+                        default=24,
+                        help='Maximum time in hours to run optimization.')
+
+    parser.add_argument('--test', action='store_true',
+                        help='If set just a quick execution is ran.')
+
+    parser.add_argument("--log_level", "-ll", type=str,
+                        default='INFO',
+                        choices=["CRITICAL", "ERROR", "WARNING", "INFO", "DEBUG"],
+                        help="Set logging level.")
+
+    return parser.parse_args(args)

@@ -2,13 +2,14 @@ import os
 import time
 import datetime
 import json
+import logging
 import multiprocessing
 from multiprocessing import Pool
 import numpy as np
 from scipy.optimize import Bounds
 from scipy.optimize import minimize
-from utils_optimize import log_out_minimize, create_logger
-from env_var import EPIDEMIC, EXPERIMENTS
+from utils_optimize import log_out_minimize, create_logger, parse_args
+from env_var import EPIDEMIC
 from forward_integration import get_model_parameters, read_initial_values
 
 
@@ -239,7 +240,7 @@ def back_int(S_g, S_vg, S_xg, L_g, beta_gh, beta, T, age_er, mob_av, pop_hat):
 
 
 def ob_fun(x):
-    logger = create_logger()
+    logger = create_logger(log_level)
     start_obj = time.time()
 
     nuf = np.reshape(x, (N_g, N_p, T))
@@ -256,7 +257,7 @@ def ob_fun(x):
 
 
 def der(x):
-    logger = create_logger()
+    logger = create_logger(log_level)
     start_der = time.time()
 
     nuf = np.reshape(x, (N_g, N_p, T))
@@ -275,7 +276,7 @@ def der(x):
 
 
 def bound_f(bound_full_orig, u_op):
-    logger = create_logger()
+    logger = create_logger(log_level)
     bound_r = np.reshape(bound_full_orig, (N_g, N_p, T))
     S_g, S_vg, S_xg, L_g, D_d, _, _ = sol(u_op, mob_av, beta, beta_gh, T,
                                           pop_hat, age_er, epidemic_npy, False)
@@ -297,7 +298,7 @@ def bound_f(bound_full_orig, u_op):
 
 
 def optimize(epidemic_npy_complete):
-    logger = create_logger()
+    logger = create_logger(log_level)
 
     # number of optimization variables
     N_f = N_g*N_p
@@ -396,7 +397,7 @@ def optimize(epidemic_npy_complete):
 
 def full_optimize(r, tau, time_horizon, init_time,
                   total_time, num_age_groups, num_regions):
-    logger = create_logger()
+    logger = create_logger(log_level)
 
     global t0
     t0 = init_time
@@ -533,9 +534,12 @@ def full_optimize(r, tau, time_horizon, init_time,
     return json_file_path
 
 
-def run_optimize(r, tau, time_horizon, init_time, total_time):
+def run_optimize(r, tau, time_horizon, init_time, total_time, log_level_in,
+                 max_execution_hours):
     multiprocessing.current_process().name = 'WorkerFor-R_%s-Tau_%s' % (r, tau)
-    logger = create_logger()
+    global log_level
+    log_level = log_level_in
+    logger = create_logger(log_level)
     try:
         start_time = time.time()
         logger.info('Starting. R: %s. Tau: %s. T: %s. T0: %s' % (r,
@@ -570,22 +574,25 @@ def run_optimize(r, tau, time_horizon, init_time, total_time):
 
 
 def run_parallel_optimizations():
-    logger = create_logger()
+    args = parse_args()
+    log_level = getattr(logging, args.log_level, None)
+    logger = create_logger(log_level)
     logger.info('Logger for optimized_vaccination configured.')
-    time_horizon = 10
-    init_time = '2021-04-18'
-    total_time = 25
-    all_experiments = [(1.5,   1.0), ]
-
-    # time_horizon = EXPERIMENTS['simulate_T']
-    # init_time = EXPERIMENTS['t0']
-    # total_time = EXPERIMENTS['simulate_T']
-    # taus = EXPERIMENTS['taus']
-    # r_experiments = EXPERIMENTS['r_effs']
-    # all_experiments = []
-    # for tau in taus:
-    #     for r in r_experiments:
-    #         all_experiments.append((r, tau))
+    if args.test:
+        time_horizon = 10
+        init_time = '2021-04-18'
+        total_time = 25
+        all_experiments = [(1.5,   1.0), ]
+    else:
+        time_horizon = args.part_time
+        init_time = args.t0
+        total_time = args.T
+        taus = args.taus
+        r_experiments = args.r_experiments
+        all_experiments = []
+        for tau in taus:
+            for r in r_experiments:
+                all_experiments.append((r, tau))
     logger.info('optimized_vaccination experiments:\n%s' % (all_experiments, ))
 
     num_cpus = os.cpu_count()
@@ -596,8 +603,9 @@ def run_parallel_optimizations():
     with Pool(processes=num_cpus) as pool:
         # Calling the function to execute simulations in asynchronous way
         async_res = [pool.apply_async(func=run_optimize,
-                                      args=(r, tau,
-                                            time_horizon, init_time, total_time))
+                                      args=(r, tau, time_horizon, init_time,
+                                            total_time, log_level,
+                                            args.max_execution_hours))
                      for r, tau in all_experiments]
 
         # Waiting for the values of the async execution
