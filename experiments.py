@@ -8,7 +8,7 @@ import time
 import datetime
 
 
-def get_experiments_results(num_age_groups, num_ervas, e, taus, u_offset,
+def get_experiments_results(num_age_groups, num_ervas, e, taus,
                             init_vacc, strategies, u, T, r_experiments, t0):
     experiments_params = {
         'num_ervas': num_ervas,
