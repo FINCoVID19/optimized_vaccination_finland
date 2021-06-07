@@ -297,7 +297,7 @@ def bound_f(bound_full_orig, u_op):
     return bound_rf, kg_pairs, D_d
 
 
-def optimize(epidemic_npy_complete):
+def optimize(epidemic_npy_complete, max_execution_hours):
     logger = create_logger(log_level)
 
     # number of optimization variables
@@ -340,9 +340,13 @@ def optimize(epidemic_npy_complete):
     kg_pairs = []
 
     minimize_iter = 1
+    # Optimization variables
     u_op = x0
     bounds = init_bounds
     last_values = np.array([np.inf])
+    # Time variables
+    start_optim = time.time()
+    max_time_secs = max_execution_hours*3600
     while True:
         start_iter = time.time()
         logger.info(('Starting minimize. Iteration: %s.\n'
@@ -366,6 +370,13 @@ def optimize(epidemic_npy_complete):
                                                  kg_pairs,
                                                  last_values[-3:], D_d))
         minimize_iter += 1
+        
+        elapsed_optim = time.time() - start_optim
+        elapsed_delta_optim = datetime.timedelta(seconds=elapsed_optim)
+        logger.info('Elapsed time in optimization: %s' % (elapsed_delta_optim, ))
+        if elapsed_delta_optim.total_seconds() > max_time_secs:
+            logger.warning('Breaking optimization because of exceeded time.')
+            break
 
         # Tolerance to 3 decimal places
         if np.allclose(last_values[-3:], D_d, rtol=0, atol=1e-3):
@@ -395,7 +406,7 @@ def optimize(epidemic_npy_complete):
     return new_epidemic_npy, u_op, kg_pairs, D_d
 
 
-def full_optimize(r, tau, time_horizon, init_time,
+def full_optimize(r, tau, time_horizon, init_time, max_execution_hours,
                   total_time, num_age_groups, num_regions):
     logger = create_logger(log_level)
 
@@ -457,7 +468,8 @@ def full_optimize(r, tau, time_horizon, init_time,
     u_total = np.array([]).reshape(N_g, N_p, 0)
     while time_done < total_time:
         logger.info('Starting optimize at time: %s/%s' % (time_done, total_time))
-        epidemic_npy_complete, u_op, kg_pairs, D_d = optimize(epidemic_npy_complete)
+        epidemic_npy_complete, u_op, kg_pairs, D_d = optimize(epidemic_npy_complete,
+                                                              max_execution_hours)
         time_done += time_horizon
         logger.info('Finished optimization, saving results.')
 
@@ -553,7 +565,8 @@ def run_optimize(r, tau, time_horizon, init_time, total_time, log_level_in,
                                  init_time=init_time,
                                  total_time=total_time,
                                  num_age_groups=9,
-                                 num_regions=5)
+                                 num_regions=5,
+                                 max_execution_hours=max_execution_hours)
 
         elapsed_time = time.time() - start_time
         elapsed_delta = datetime.timedelta(seconds=elapsed_time)
@@ -582,18 +595,37 @@ def run_parallel_optimizations():
         time_horizon = 10
         init_time = '2021-04-18'
         total_time = 25
-        all_experiments = [(1.5,   1.0), ]
+        taus = [0.5]
+        r_experiments = [1.5]
     else:
         time_horizon = args.part_time
         init_time = args.t0
         total_time = args.T
         taus = args.taus
         r_experiments = args.r_experiments
-        all_experiments = []
-        for tau in taus:
-            for r in r_experiments:
-                all_experiments.append((r, tau))
-    logger.info('optimized_vaccination experiments:\n%s' % (all_experiments, ))
+
+    all_experiments = []
+    for tau in taus:
+        for r in r_experiments:
+            all_experiments.append((r, tau))
+    logger.info(('Script parameters:\n'
+                 'R_effs: %(rs)s\n'
+                 'Taus: %(taus)s\n'
+                 'T0: %(t0)s\n'
+                 'T: %(T)s\n'
+                 'part_time: %(part_time)s\n'
+                 'all_experiments: %(all_experiments)s\n'
+                 'Log level: %(log_level)s\n'
+                 'Max execution (hours): %(max_exec)s') % {
+                    'rs': r_experiments,
+                    'taus': taus,
+                    't0': init_time,
+                    'T': total_time,
+                    'part_time': time_horizon,
+                    'all_experiments': all_experiments,
+                    'log_level': args.log_level,
+                    'max_exec': args.max_execution_hours
+                })
 
     num_cpus = os.cpu_count()
     start_time = time.time()
