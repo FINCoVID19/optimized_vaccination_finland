@@ -106,7 +106,8 @@ def sol(u_con, mob_av, beta, beta_gh, T, pop_hat, age_er, epidemic_npy, return_s
         R_g[:, :, j+1] = R_g[:, :, j] + T_hr*H_rg[:, :, j] + (1-mu_w_ages)*(1-p_c_ages)*T_hw*H_wg[:, :, j] + (1-mu_q_ages)*T_q0*Q_0g[:, :, j]
         D_g[:, :, j+1] = D_g[:, :, j] + mu_q_ages*T_q0*Q_0g[:, :, j]+mu_w_ages*(1-p_c_ages)*T_hw*H_wg[:, :, j] + mu_c_ages*T_hc*H_cg[:, :, j]
 
-        D_d[:, :, j] = T_q1*Q_1g[:, :, j]*age_er_t
+        # D_d[:, :, j] = T_q1*Q_1g[:, :, j]*age_er_t
+        D_d[:, :, j+1] = mu_q_ages*T_q0*Q_0g[:, :, j]+mu_w_ages*(1-p_c_ages)*T_hw*H_wg[:, :, j] + mu_c_ages*T_hc*H_cg[:, :, j]
 
     # Filling the values at the last time step
     infect_mobility = (I_g[:, :, T-1]*age_er_t)@mobility_term.T
@@ -114,7 +115,8 @@ def sol(u_con, mob_av, beta, beta_gh, T, pop_hat, age_er, epidemic_npy, return_s
     L_g[:, :, T-1] = beta*lambda_g
     u[:, :, T-1] = np.minimum(u_con[:, :, T-1], np.maximum(0.0, S_g[:, :, T-1] - beta*lambda_g*S_g[:, :, T-1]))
     
-    D_d[:, :, T-1] = T_q1*Q_1g[:, :, T-1]*age_er_t
+    # D_d[:, :, T-1] = T_q1*Q_1g[:, :, T-1]*age_er_t
+    D_d = D_d*age_er_t[:, :, np.newaxis]
 
     V_d = u*age_er_t[:, :, np.newaxis]
     V_d = V_d.sum(axis=(0, 1))
@@ -222,7 +224,11 @@ def back_int(S_g, S_vg, S_xg, L_g, beta_gh, beta, T, age_er, mob_av, pop_hat):
         lI[:, :, i-1] = lI[:, :, i] - T_I*lI[:, :, i] + sumh + sumh2 + sumh3 + lQ_0[:, :, i]*(1-p_H_ages)*T_I \
             + lQ_1[:, :, i]*p_H_ages*T_I
         lQ_0[:, :, i-1] = lQ_0[:, :, i]*(1. - T_q0) + lD[:, :, i]*mu_q_ages*T_q0
-        lQ_1[:, :, i-1] = lQ_1[:, :, i]*(1. - T_q1) + lHw[:, :, i]*T_q1 + T_q1
+        
+        # lQ_1[:, :, i-1] = lQ_1[:, :, i]*(1. - T_q1) + lHw[:, :, i]*T_q1 + T_q1
+        lQ_1[:, :, i-1] = lQ_1[:, :, i]*(1. - T_q1) + lHw[:, :, i]*T_q1
+        lD[:, :, i-1] = lD[:, :, i] + 1.
+        
         lHw[:, :, i-1] = lHw[:, :, i]*(1.-T_hw) + lHc[:, :, i]*p_c_ages*T_hw \
             + lD[:, :, i]*mu_w_ages*(1.-p_c_ages)*T_hw
         lHc[:, :, i-1] = lHc[:, :, i]*(1.-T_hc) + lHr[:, :, i]*(1.-mu_c_ages)*T_hc \
@@ -453,7 +459,7 @@ def full_optimize(r, tau, time_horizon, init_time,
     T = time_horizon
     logger.info('Time horizon for optimizations: %s' % (T, ))
 
-    base_name = "R_%s_tau_%s_T_%s" % (r, tau, total_time)
+    base_name = 'R_%s_tau_%s_t0_%s_T_%s' % (r, tau, t0, total_time)
     dir_path = os.path.dirname(os.path.realpath(__file__))
     results_path = os.path.join(dir_path, 'out', 'results_optim')
     os.makedirs(results_path, exist_ok=True)
@@ -521,7 +527,11 @@ def full_optimize(r, tau, time_horizon, init_time,
     json_save['u_op'] = u_op_file_path
     json_save['final_epidemic'] = final_epi_file_path
     json_save['D_d'] = D_d
-    json_save['kg_pairs'] = kg_pairs
+    json_save['r'] = r
+    json_save['tau'] = tau
+    json_save['t0'] = t0
+    json_save['T'] = T
+    json_save['total_time'] = total_time
 
     with open(json_file_path, 'w', encoding='utf-8') as f:
         json.dump(json_save, f, indent=2)
@@ -605,20 +615,25 @@ def create_logger():
 def run_parallel_optimizations():
     logger = create_logger()
     logger.info('Logger for optimized_vaccination configured.')
+    time_horizon = 115
+    init_time = '2021-04-18'
+    total_time = 115
+    # time_horizon = 10
+    # init_time = '2021-04-18'
+    # total_time = 25
     all_experiments = [
-        # (0.75,  0.,     40, '2021-04-18', 115),
-        # (0.75,  0.5,    40, '2021-04-18', 115),
-        # (0.75,  1.0,    40, '2021-04-18', 115),
-        # (1.0,   0.,     40, '2021-04-18', 115),
-        # (1.0,   0.5,    40, '2021-04-18', 115),
-        # (1.0,   1.0,    40, '2021-04-18', 115),
-        # (1.25,  0.,     40, '2021-04-18', 115),
-        # (1.25,  0.5,    40, '2021-04-18', 115),
-        # (1.25,  1.0,    40, '2021-04-18', 115),
-        # (1.5,   0.,     40, '2021-04-18', 115),
-        # (1.5,   0.5,    40, '2021-04-18', 115),
-        # (1.5,   1.0,    40, '2021-04-18', 115),
-        (1.5,   1.0,    10, '2021-04-18', 25),
+        (0.75,  0.),
+        (0.75,  0.5),
+        (0.75,  1.0),
+        (1.0,   0.),
+        (1.0,   0.5),
+        (1.0,   1.0),
+        (1.25,  0.),
+        (1.25,  0.5),
+        (1.25,  1.0),
+        (1.5,   0.),
+        (1.5,   0.5),
+        (1.5,   1.0),
     ]
     logger.info('optimized_vaccination experiments:\n%s' % (all_experiments, ))
 
@@ -632,8 +647,7 @@ def run_parallel_optimizations():
         async_res = [pool.apply_async(func=run_optimize,
                                       args=(r, tau,
                                             time_horizon, init_time, total_time))
-                     for r, tau,
-                     time_horizon, init_time, total_time in all_experiments]
+                     for r, tau in all_experiments]
 
         # Waiting for the values of the async execution
         for res in async_res:
