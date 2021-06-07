@@ -2,13 +2,11 @@ import os
 import time
 import datetime
 import json
-import logging
-import logging.handlers
-import multiprocessing
 from multiprocessing import Pool
 import numpy as np
 from scipy.optimize import Bounds
 from scipy.optimize import minimize
+from utils_optimize import log_out_minimize, create_logger
 from env_var import EPIDEMIC, EXPERIMENTS
 from forward_integration import get_model_parameters, read_initial_values
 
@@ -297,22 +295,6 @@ def bound_f(bound_full_orig, u_op):
     return bound_rf, kg_pairs, D_d
 
 
-def log_out_minimize(minimize_result):
-    result_str = ('%(message)s\t(Exit mode %(status)s)\n'
-                  '\tCurrent function value: %(value)s\n'
-                  '\tIterations: %(iter)s\n'
-                  '\tFunction evaluations: %(evals)s\n'
-                  '\tGradient evaluations: %(grad)s') % ({
-                    'message': minimize_result.message,
-                    'status': minimize_result.status,
-                    'value': minimize_result.fun,
-                    'evals': minimize_result.nfev,
-                    'grad': minimize_result.njev,
-                    'iter': minimize_result.nit,
-                  })
-    return result_str
-
-
 def optimize(epidemic_npy_complete):
     logger = create_logger()
 
@@ -585,50 +567,23 @@ def run_optimize(r, tau, time_horizon, init_time, total_time):
         return None
 
 
-def create_logger():
-    logger = multiprocessing.get_logger()
-    logger.setLevel(logging.DEBUG)
-    formatter = logging.Formatter(
-        fmt='%(asctime)s %(levelname)s %(processName)s: %(message)s',
-        datefmt='%m/%d/%Y %H:%M:%S %p'
-    )
-    handler_file = logging.handlers.RotatingFileHandler(
-                    'optimized_vaccination.log',
-                    maxBytes=100e6,
-                    backupCount=5
-                    )
-    handler_console = logging.StreamHandler()
-    handler_file.setFormatter(formatter)
-    handler_console.setFormatter(formatter)
-
-    # this bit will make sure you won't have 
-    # duplicated messages in the output
-    if not len(logger.handlers):
-        logger.addHandler(handler_file)
-    
-    if len(logger.handlers) == 1:
-        logger.addHandler(handler_console)
-
-    return logger
-
-
 def run_parallel_optimizations():
     logger = create_logger()
     logger.info('Logger for optimized_vaccination configured.')
-    # time_horizon = 10
-    # init_time = '2021-04-18'
-    # total_time = 25
-    # all_experiments = [(1.5,   1.0), ]
+    time_horizon = 10
+    init_time = '2021-04-18'
+    total_time = 25
+    all_experiments = [(1.5,   1.0), ]
 
-    time_horizon = EXPERIMENTS['simulate_T']
-    init_time = EXPERIMENTS['t0']
-    total_time = EXPERIMENTS['simulate_T']
-    taus = EXPERIMENTS['taus']
-    r_experiments = EXPERIMENTS['r_effs']
-    all_experiments = []
-    for tau in taus:
-        for r in r_experiments:
-            all_experiments.append((r, tau))
+    # time_horizon = EXPERIMENTS['simulate_T']
+    # init_time = EXPERIMENTS['t0']
+    # total_time = EXPERIMENTS['simulate_T']
+    # taus = EXPERIMENTS['taus']
+    # r_experiments = EXPERIMENTS['r_effs']
+    # all_experiments = []
+    # for tau in taus:
+    #     for r in r_experiments:
+    #         all_experiments.append((r, tau))
     logger.info('optimized_vaccination experiments:\n%s' % (all_experiments, ))
 
     num_cpus = os.cpu_count()
