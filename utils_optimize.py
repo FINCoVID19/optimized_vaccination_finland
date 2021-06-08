@@ -76,6 +76,9 @@ def parse_args(args=sys.argv[1:]):
                         help=('The total time horizon is going to be divided'
                               ' in  batches part_time days.'))
 
+    parser.add_argument('--hosp_optim', action='store_true',
+                        help='If set the number of hospitalizations is optimized.')
+
     parser.add_argument('--max_execution_hours', type=int,
                         default=24,
                         help='Maximum time in hours to run optimization.')

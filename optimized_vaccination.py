@@ -104,10 +104,12 @@ def sol(u_con, mob_av, beta, beta_gh, T, pop_hat, age_er, epidemic_npy, return_s
         H_cg[:, :, j+1] = H_cg[:, :, j] + p_c_ages*T_hw*H_wg[:, :, j] - T_hc*H_cg[:, :, j]
         H_rg[:, :, j+1] = H_rg[:, :, j] + (1-mu_c_ages)*T_hc*H_cg[:, :, j] - T_hr*H_rg[:, :, j]
         R_g[:, :, j+1] = R_g[:, :, j] + T_hr*H_rg[:, :, j] + (1-mu_w_ages)*(1-p_c_ages)*T_hw*H_wg[:, :, j] + (1-mu_q_ages)*T_q0*Q_0g[:, :, j]
-        D_g[:, :, j+1] = D_g[:, :, j] + mu_q_ages*T_q0*Q_0g[:, :, j]+mu_w_ages*(1-p_c_ages)*T_hw*H_wg[:, :, j] + mu_c_ages*T_hc*H_cg[:, :, j]
+        D_g[:, :, j+1] = D_g[:, :, j] + mu_q_ages*T_q0*Q_0g[:, :, j] + mu_w_ages*(1-p_c_ages)*T_hw*H_wg[:, :, j] + mu_c_ages*T_hc*H_cg[:, :, j]
 
-        # D_d[:, :, j] = T_q1*Q_1g[:, :, j]*age_er_t
-        D_d[:, :, j+1] = mu_q_ages*T_q0*Q_0g[:, :, j]+mu_w_ages*(1-p_c_ages)*T_hw*H_wg[:, :, j] + mu_c_ages*T_hc*H_cg[:, :, j]
+        if hosp_optim:
+            D_d[:, :, j] = T_q1*Q_1g[:, :, j]
+        else:
+            D_d[:, :, j+1] = mu_q_ages*T_q0*Q_0g[:, :, j] + mu_w_ages*(1-p_c_ages)*T_hw*H_wg[:, :, j] + mu_c_ages*T_hc*H_cg[:, :, j]
 
     # Filling the values at the last time step
     infect_mobility = (I_g[:, :, T-1]*age_er_t)@mobility_term.T
@@ -115,7 +117,9 @@ def sol(u_con, mob_av, beta, beta_gh, T, pop_hat, age_er, epidemic_npy, return_s
     L_g[:, :, T-1] = beta*lambda_g
     u[:, :, T-1] = np.minimum(u_con[:, :, T-1], np.maximum(0.0, S_g[:, :, T-1] - L_g[:, :, T-1]*S_g[:, :, T-1]))
     
-    # D_d[:, :, T-1] = T_q1*Q_1g[:, :, T-1]*age_er_t
+    if hosp_optim:
+        D_d[:, :, T-1] = T_q1*Q_1g[:, :, T-1]
+
     D_d = D_d*age_er_t[:, :, np.newaxis]
 
     V_d = u*age_er_t[:, :, np.newaxis]
@@ -225,9 +229,11 @@ def back_int(S_g, S_vg, S_xg, L_g, beta_gh, beta, T, age_er, mob_av, pop_hat):
             + lQ_1[:, :, i]*p_H_ages*T_I
         lQ_0[:, :, i-1] = lQ_0[:, :, i]*(1. - T_q0) + lD[:, :, i]*mu_q_ages*T_q0
         
-        # lQ_1[:, :, i-1] = lQ_1[:, :, i]*(1. - T_q1) + lHw[:, :, i]*T_q1 + T_q1
-        lQ_1[:, :, i-1] = lQ_1[:, :, i]*(1. - T_q1) + lHw[:, :, i]*T_q1
-        lD[:, :, i-1] = lD[:, :, i] + 1.
+        if hosp_optim:
+            lQ_1[:, :, i-1] = lQ_1[:, :, i]*(1. - T_q1) + lHw[:, :, i]*T_q1 + T_q1
+         else:
+            lQ_1[:, :, i-1] = lQ_1[:, :, i]*(1. - T_q1) + lHw[:, :, i]*T_q1
+            lD[:, :, i-1] = lD[:, :, i] + 1.
         
         lHw[:, :, i-1] = lHw[:, :, i]*(1.-T_hw) + lHc[:, :, i]*p_c_ages*T_hw \
             + lD[:, :, i]*mu_w_ages*(1.-p_c_ages)*T_hw
@@ -408,7 +414,7 @@ def optimize(epidemic_npy_complete, max_execution_hours):
 
 
 def full_optimize(r, tau, time_horizon, init_time, max_execution_hours,
-                  total_time, num_age_groups, num_regions):
+                  total_time, num_age_groups, num_regions, hosp_optim_in):
     logger = create_logger(log_level)
 
     global t0
@@ -419,6 +425,9 @@ def full_optimize(r, tau, time_horizon, init_time, max_execution_hours,
 
     global N_p
     N_p = num_regions
+
+    global hosp_optim
+    hosp_optim = hosp_optim_in
 
     logger.debug(('Getting parameters with:\n'
                   'R: %s\n'
@@ -548,7 +557,7 @@ def full_optimize(r, tau, time_horizon, init_time, max_execution_hours,
 
 
 def run_optimize(r, tau, time_horizon, init_time, total_time, log_level_in,
-                 max_execution_hours):
+                 hosp_optim, max_execution_hours):
     multiprocessing.current_process().name = 'WorkerFor-R_%s-Tau_%s' % (r, tau)
     global log_level
     log_level = log_level_in
@@ -565,6 +574,7 @@ def run_optimize(r, tau, time_horizon, init_time, total_time, log_level_in,
                                  time_horizon=time_horizon,
                                  init_time=init_time,
                                  total_time=total_time,
+                                 hosp_optim_in=hosp_optim,
                                  num_age_groups=9,
                                  num_regions=5,
                                  max_execution_hours=max_execution_hours)
@@ -598,12 +608,14 @@ def run_parallel_optimizations():
         total_time = 25
         taus = [0.5]
         r_experiments = [1.5]
+        hosp_optim = False
     else:
         time_horizon = args.part_time
         init_time = args.t0
         total_time = args.T
         taus = args.taus
         r_experiments = args.r_experiments
+        hosp_optim = args.hosp_optim
 
     all_experiments = []
     for tau in taus:
@@ -615,6 +627,7 @@ def run_parallel_optimizations():
                  'T0: %(t0)s\n'
                  'T: %(T)s\n'
                  'part_time: %(part_time)s\n'
+                 'Hospitalization optimized: %(hosp_optim)s\n'
                  'all_experiments: %(all_experiments)s\n'
                  'Log level: %(log_level)s\n'
                  'Max execution (hours): %(max_exec)s') % {
@@ -623,6 +636,7 @@ def run_parallel_optimizations():
                     't0': init_time,
                     'T': total_time,
                     'part_time': time_horizon,
+                    'hosp_optim': hosp_optim,
                     'all_experiments': all_experiments,
                     'log_level': args.log_level,
                     'max_exec': args.max_execution_hours
@@ -637,7 +651,7 @@ def run_parallel_optimizations():
         # Calling the function to execute simulations in asynchronous way
         async_res = [pool.apply_async(func=run_optimize,
                                       args=(r, tau, time_horizon, init_time,
-                                            total_time, log_level,
+                                            total_time, log_level, hosp_optim,
                                             args.max_execution_hours))
                      for r, tau in all_experiments]
 
