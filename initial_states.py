@@ -1,6 +1,8 @@
 import os
+import sys
 import logging
 from logging import handlers
+import argparse
 import pandas as pd
 import numpy as np
 from env_var import EPIDEMIC
@@ -109,9 +111,8 @@ def compartment_values_daily(logger, erva_pop_file, filename=None,
     return complete_dataframe
 
 
-def full_epidemic_state_finland(logger, erva_pop_file, filename=None,
-                                number_age_groups=9, init_vacc=True,
-                                e=EPIDEMIC['e']):
+def full_epidemic_state_finland(logger, region_pop_file, region, filename,
+                                number_age_groups, init_vacc, e=EPIDEMIC['e']):
     logger.info('Getting complete state of epidemic with '
                 'epidemic compartments, vaccines and hospitalizations')
     logger.info('Number of age groups: %d' % (number_age_groups))
@@ -158,13 +159,46 @@ def full_epidemic_state_finland(logger, erva_pop_file, filename=None,
     return epidemic_state
 
 
-if __name__ == "__main__":
+def parse_args(args=sys.argv[1:]):
+    parser = argparse.ArgumentParser(
+        formatter_class=argparse.ArgumentDefaultsHelpFormatter,
+        description="Get initial states for the epidemic in Finland."
+    )
+
+    parser.add_argument('--num_age_groups', type=int,
+                        default=9,
+                        choices=[8, 9],
+                        help="Get the initial states for 'num_age_groups'.")
+
+    parser.add_argument("--region", type=str,
+                        default='erva',
+                        choices=["erva", "hcd"],
+                        help="Get the initial states for this 'region'.")
+
+    parser.add_argument('--init_vacc', action='store_false',
+                        help=('If set the initial states will be given '
+                              'without vaccination.'))
+
+    parser.add_argument("--log_file", type=str,
+                        default='logs_initial_states.log',
+                        help="Logging file.")
+
+    parser.add_argument("--log_level", type=str,
+                        default='INFO',
+                        choices=["CRITICAL", "ERROR", "WARNING", "INFO", "DEBUG"],
+                        help="Set logging level.")
+
+    return parser.parse_args(args)
+
+
+def initial_states():
+    args = parse_args()
     # Select data directory
     curr_dir = os.path.dirname(os.path.realpath(__file__))
 
     # Get a logger of the events
-    logfile = os.path.join(curr_dir, 'logs_initial_states.log')
-    numeric_log_level = getattr(logging, "INFO", None)
+    logfile = os.path.join(curr_dir, args.log_file)
+    numeric_log_level = getattr(logging, args.log_level, None)
     logging.basicConfig(
         format='%(asctime)s %(levelname)s: %(message)s',
         datefmt='%m/%d/%Y %H:%M:%S %p',
@@ -180,20 +214,38 @@ if __name__ == "__main__":
     logger = logging.getLogger()
     logger.info('Logger ready. Logging to file: %s' % (logfile))
 
+    num_age_groups = args.num_age_groups
+    region = args.region
+    init_vacc = args.init_vacc
+    logger.info(('Constructing initial states with parameters:'
+                 'Age groups: %s'
+                 'Region: %s'
+                 'init_vacc: %s') % (num_age_groups, region, init_vacc))
+
+    stats_dir = os.path.join(curr_dir, 'stats')
+    out_dir = os.path.join(curr_dir, 'out')
+    os.makedirs(out_dir, exist_ok=True)
+
     # Starting with the tasks (main loop)
     try:
-        stats_dir = os.path.join(curr_dir, 'stats')
-        out_dir = os.path.join(curr_dir, 'out')
-        os.makedirs(out_dir, exist_ok=True)
+        pop_filename = '%s_population_age_2020.csv' % (region, )
+        region_pop_file = os.path.join(stats_dir, pop_filename)
 
-        erva_pop_file = os.path.join(stats_dir, 'erva_population_age_2020.csv')
-
-        out_csv_filename = os.path.join(out_dir, 'epidemic_finland_9.csv')
-        full_epidemic_state_finland(logger, erva_pop_file, out_csv_filename,
-                                    number_age_groups=9)
-
-        out_csv_filename = os.path.join(out_dir, 'epidemic_finland_9_no_vacc.csv')
-        full_epidemic_state_finland(logger, erva_pop_file, out_csv_filename,
-                                    number_age_groups=9, init_vacc=False)
+        if init_vacc:
+            csv_name = 'epidemic_finland_%s_%s.csv' % (num_age_groups, region)
+        else:
+            csv_name = 'epidemic_finland_%s_%s_no_vacc.csv' % (num_age_groups,
+                                                               region)
+        out_csv_filename = os.path.join(out_dir, csv_name)
+        full_epidemic_state_finland(logger,
+                                    region_pop_file=region_pop_file,
+                                    filename=out_csv_filename,
+                                    number_age_groups=num_age_groups,
+                                    init_vacc=init_vacc,
+                                    region=region)
     except Exception:
         logger.exception("Fatal error in main loop")
+
+
+if __name__ == "__main__":
+    initial_states()
