@@ -44,7 +44,8 @@ def static_population_region_age(logger, csv_file, number_age_groups):
     return population_age_df, pop_age_prop
 
 
-def fetch_thl_vaccines_erva_weekly(logger, filename=None, number_age_groups=9):
+def fetch_thl_vaccines_region_weekly(logger, number_age_groups, region,
+                                     filename=None):
     logger.info('Getting THL vaccination statistics (weekly)')
 
     # Select the appropriate URL
@@ -73,9 +74,14 @@ def fetch_thl_vaccines_erva_weekly(logger, filename=None, number_age_groups=9):
     vaccinated_df = vaccinated_df.fillna(0)
     logger.debug('Filled NaNs with zeros')
 
-    hcd_erva_mapping = MAPPINGS['hcd_erva']
-    vaccinated_df['erva'] = vaccinated_df.apply(lambda row: hcd_erva_mapping[row['Area']], axis=1)
-    logger.debug('Augmented data with erva')
+    if region == 'erva':
+        hcd_erva_mapping = MAPPINGS['hcd_erva']
+        vaccinated_df['region'] = vaccinated_df.apply(lambda row: hcd_erva_mapping[row['Area']], axis=1)
+    elif region == 'hcd':
+        vaccinated_df['region'] = vaccinated_df['Area']
+        logger.debug('API already at HCD level.')
+    else:
+        raise ValueError('Invalid region name: %s' % (region, ))
 
     age_group_mapping = MAPPINGS['age_groups'][number_age_groups]['vaccines']
     vaccinated_df['age group'] = vaccinated_df.apply(lambda row: age_group_mapping[row['Age']], axis=1)
@@ -84,24 +90,24 @@ def fetch_thl_vaccines_erva_weekly(logger, filename=None, number_age_groups=9):
     columns_agg_erva = ['age group',
                         'Vaccination dose',
                         'Time',
-                        'erva']
-    vaccinated_erva = vaccinated_df.groupby(by=columns_agg_erva, as_index=False).sum()
+                        'region']
+    vaccinated_region = vaccinated_df.groupby(by=columns_agg_erva, as_index=False).sum()
 
-    vaccinated_erva = vaccinated_erva[['erva', 'Time', 'age group', 'Vaccination dose', 'val']]
-    vaccinated_erva = vaccinated_erva.sort_values(by=['erva', 'Time', 'age group', 'Vaccination dose'])
-    logger.debug('Sorting by ERVA')
+    vaccinated_region = vaccinated_region[['region', 'Time', 'age group', 'Vaccination dose', 'val']]
+    vaccinated_region = vaccinated_region.sort_values(by=['region', 'Time', 'age group', 'Vaccination dose'])
+    logger.debug('Sorting by region')
 
     # Removing total counts in Finland
-    vaccinated_erva = vaccinated_erva[~vaccinated_erva['Time'].str.contains('All')]
-    vaccinated_erva = vaccinated_erva[~vaccinated_erva['erva'].str.contains('All')]
-    vaccinated_erva = vaccinated_erva[~vaccinated_erva['age group'].str.contains('All')]
-    vaccinated_erva = vaccinated_erva[~vaccinated_erva['Vaccination dose'].str.contains('All')]
+    vaccinated_region = vaccinated_region[~vaccinated_region['Time'].str.contains('All')]
+    vaccinated_region = vaccinated_region[~vaccinated_region['region'].str.contains('All')]
+    vaccinated_region = vaccinated_region[~vaccinated_region['age group'].str.contains('All')]
+    vaccinated_region = vaccinated_region[~vaccinated_region['Vaccination dose'].str.contains('All')]
 
     if filename is not None:
-        vaccinated_erva.to_csv(filename, index=False)
+        vaccinated_region.to_csv(filename, index=False)
         logger.info('Results written to: %s' % (filename, ))
 
-    return vaccinated_erva
+    return vaccinated_region
 
 
 def fetch_hs_hospitalizations(logger):
@@ -200,23 +206,25 @@ def construct_hs_hosp_age_erva(logger, number_age_groups=9):
     return hosp_age_erva_daily
 
 
-def construct_thl_vaccines_erva_daily(logger, filename=None, number_age_groups=9):
+def construct_thl_vaccines_region_daily(logger, number_age_groups, region,
+                                        filename=None):
     logger.info('Constructing vaccinations (daily)')
-    vaccinated_weekly = fetch_thl_vaccines_erva_weekly(logger,
-                                                       number_age_groups=number_age_groups)
+    vaccinated_weekly = fetch_thl_vaccines_region_weekly(logger,
+                                                         region=region,
+                                                         number_age_groups=number_age_groups)
     vaccinated_list = vaccinated_weekly.values
 
     dates = np.unique(vaccinated_list[:, 1])
-    ervas = np.unique(vaccinated_list[:, 0])
+    regions = np.unique(vaccinated_list[:, 0])
 
     age_groups = pd.unique(vaccinated_weekly['age group'])
 
-    header = 'date;erva;age;First dose;Second dose'
+    header = 'date;region;age;First dose;Second dose'
     final_lines = [header, ]
     for date in dates:
-        for erva in ervas:
+        for region in regions:
             vacc_week = vaccinated_list[np.where(
-                            (vaccinated_list[:, 1] == date) & (vaccinated_list[:, 0] == erva)
+                            (vaccinated_list[:, 1] == date) & (vaccinated_list[:, 0] == region)
                         )]
             vacc_day = np.copy(vacc_week)
             vacc_day_vals = vacc_day[:, 4]/7
@@ -229,7 +237,7 @@ def construct_thl_vaccines_erva_daily(logger, filename=None, number_age_groups=9
                 line_counter = 0
                 for age_g in age_groups:
                     line = [date_str,
-                            erva,
+                            region,
                             age_g,
                             str(vacc_day_vals[line_counter]),
                             str(vacc_day_vals[line_counter+1])]

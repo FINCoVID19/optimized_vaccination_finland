@@ -8,7 +8,7 @@ import numpy as np
 from env_var import EPIDEMIC
 from fetch_data import (
     construct_cases_age_region_daily, static_population_region_age,
-    construct_thl_vaccines_erva_daily, construct_hs_hosp_age_erva
+    construct_thl_vaccines_region_daily, construct_hs_hosp_age_erva
 )
 
 
@@ -123,8 +123,9 @@ def full_epidemic_state_finland(logger, region_pop_file, region, filename,
                                           region=region,
                                           number_age_groups=number_age_groups)
     logger.info('Epidemic compartments gotten.')
-    vacc_df = construct_thl_vaccines_erva_daily(logger,
-                                                number_age_groups=number_age_groups)
+    vacc_df = construct_thl_vaccines_region_daily(logger,
+                                                  region=region,
+                                                  number_age_groups=number_age_groups)
     logger.info('Number of vaccinated gotten.')
     hosp_df = construct_hs_hosp_age_erva(logger, number_age_groups=number_age_groups)
     logger.info('Number of hospitalizations gotten.')
