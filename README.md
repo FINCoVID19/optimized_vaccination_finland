@@ -41,7 +41,13 @@ The result of this script will be the CSV files `out/epidemic_finaland_*.csv`.
 
 To get the optimal vaccination strategies using SLSQP, different `R` and `tau` values.
 ```sh
-python optimized_vaccination.py
+python optimized_vaccination.py \
+--r_experiments 0.75 1.0 1.25 1.5 \
+--taus 0.0 0.5 1.0 \
+--t0 2021-04-18 \
+--T 115 \
+--part_time 115 \
+--max_execution_hours 48
 ```
 
 The results of the optimized vaccination strategy as well as the comparison of it with with different vaccination strategies can be found in the notebook

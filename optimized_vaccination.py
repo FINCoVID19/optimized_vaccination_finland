@@ -231,7 +231,7 @@ def back_int(S_g, S_vg, S_xg, L_g, beta_gh, beta, T, age_er, mob_av, pop_hat):
         
         if hosp_optim:
             lQ_1[:, :, i-1] = lQ_1[:, :, i]*(1. - T_q1) + lHw[:, :, i]*T_q1 + T_q1
-         else:
+        else:
             lQ_1[:, :, i-1] = lQ_1[:, :, i]*(1. - T_q1) + lHw[:, :, i]*T_q1
             lD[:, :, i-1] = lD[:, :, i] + 1.
         
