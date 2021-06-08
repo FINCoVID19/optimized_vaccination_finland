@@ -21,8 +21,8 @@ def transform_thl_week_datetime(thl_time):
     return monday_of_week
 
 
-def static_population_erva_age(logger, csv_file, number_age_groups=9):
-    logger.info('Getting population of ervas by age (2020)')
+def static_population_region_age(logger, csv_file, number_age_groups):
+    logger.info('Getting population of regions by age (2020)')
     population_age_df = pd.read_csv(csv_file, sep=";", encoding='utf-8')
     logger.debug('Constructed pandas dataframe')
 
@@ -32,14 +32,14 @@ def static_population_erva_age(logger, csv_file, number_age_groups=9):
 
     age_group_mapping = MAPPINGS['age_groups'][number_age_groups]['population']
     population_age_df['age_group'] = population_age_df.apply(lambda row: age_group_mapping[row['Age']], axis=1)
-    population_age_df = population_age_df.groupby(by=['erva', 'age_group'],
+    population_age_df = population_age_df.groupby(by=['region', 'age_group'],
                                                   as_index=False).sum()
     pop_age_prop = population_age_df.copy()
-    ervas = pd.unique(pop_age_prop['erva'])
-    for erva in ervas:
-        erva_counts = pop_age_prop.loc[pop_age_prop['erva'] == erva, 'Total'].values
-        tot_erva = np.sum(erva_counts)
-        pop_age_prop.loc[pop_age_prop['erva'] == erva, 'Total'] /= tot_erva
+    regions = pd.unique(pop_age_prop['region'])
+    for region in regions:
+        region_counts = pop_age_prop.loc[pop_age_prop['region'] == region, 'Total'].values
+        tot_region = np.sum(region_counts)
+        pop_age_prop.loc[pop_age_prop['region'] == region, 'Total'] /= tot_region
 
     return population_age_df, pop_age_prop
 
@@ -250,8 +250,8 @@ def construct_thl_vaccines_erva_daily(logger, filename=None, number_age_groups=9
     return vaccinated_daily
 
 
-def fetch_thl_cases_erva_daily(logger):
-    logger.debug('Getting THL reported cases by ERVA (daily)')
+def fetch_thl_cases_region_daily(logger, region):
+    logger.debug('Getting THL reported cases by region (daily)')
 
     # Select the appropriate URL
     url = REQUESTS['cases_by_day']
@@ -285,20 +285,25 @@ def fetch_thl_cases_erva_daily(logger):
     new_cases_df = new_cases_df.drop(columns=['Measure'])
     logger.debug('Removed unecessary Measure column')
 
-    hcd_erva_mapping = MAPPINGS['hcd_erva']
-    new_cases_df['erva'] = new_cases_df.apply(lambda row: hcd_erva_mapping[row['Area']], axis=1)
-    logger.debug('Augmented data with erva')
+    if region == 'erva':
+        hcd_erva_mapping = MAPPINGS['hcd_erva']
+        new_cases_df['region'] = new_cases_df.apply(lambda row: hcd_erva_mapping[row['Area']], axis=1)
+    elif region == 'hcd':
+        new_cases_df['region'] = new_cases_df['Area']
+        logger.debug('API already at HCD level.')
+    else:
+        raise ValueError('Invalid region name: %s' % (region, ))
 
-    reported_cases_erva = new_cases_df.groupby(by=['Time', 'erva'], as_index=False).sum()
-    logger.debug('Keeping only ervas')
+    reported_cases_region = new_cases_df.groupby(by=['Time', 'region'], as_index=False).sum()
+    logger.debug('Augmented data at %s level' % (region, ))
 
     # Remove the counts for Finland
-    reported_cases_erva = reported_cases_erva[~reported_cases_erva['erva'].str.contains('All')]
+    reported_cases_region = reported_cases_region[~reported_cases_region['region'].str.contains('All')]
 
-    return reported_cases_erva
+    return reported_cases_region
 
 
-def fetch_finland_cases_age_weekly(logger, number_age_groups=9):
+def fetch_finland_cases_age_weekly(logger, number_age_groups):
     logger.debug('Getting THL reported cases by age (weekly)')
 
     # Select the appropriate URL
@@ -378,7 +383,7 @@ def fetch_finland_cases_age_weekly(logger, number_age_groups=9):
     return cases_age, cases_age_prop
 
 
-def construct_finland_age_cases_daily(logger, number_age_groups=9):
+def construct_finland_age_cases_daily(logger, number_age_groups):
     logger.info('Constructing cases by age (daily)')
     cases, cases_prop = fetch_finland_cases_age_weekly(logger,
                                                        number_age_groups=number_age_groups)
@@ -426,11 +431,11 @@ def construct_finland_age_cases_daily(logger, number_age_groups=9):
     return age_cases_daily, age_cases_prop
 
 
-def construct_cases_age_erva_daily(logger, number_age_groups=9):
-    logger.info('Constructing cases by age and erva (daily)')
+def construct_cases_age_region_daily(logger, region, number_age_groups):
+    logger.info('Constructing cases by age and region (daily)')
     _, cases_age_prop = construct_finland_age_cases_daily(logger,
                                                           number_age_groups=number_age_groups)
-    cases_erva = fetch_thl_cases_erva_daily(logger)
+    cases_region = fetch_thl_cases_region_daily(logger, region=region)
 
     cases_age_prop_list = cases_age_prop.values
 
@@ -438,17 +443,17 @@ def construct_cases_age_erva_daily(logger, number_age_groups=9):
     for row_age_prop in cases_age_prop_list:
         time, *probs = row_age_prop
 
-        cases_erva_date = cases_erva.loc[cases_erva['Time'] == time, ]
-        cases_erva_date = cases_erva_date.values
-        for cases_line in cases_erva_date:
-            _, erva, cases = cases_line
+        cases_region_date = cases_region.loc[cases_region['Time'] == time, ]
+        cases_region_date = cases_region_date.values
+        for cases_line in cases_region_date:
+            _, region, cases = cases_line
             cases_ages = cases*np.array(probs)
 
-            new_line = [time, erva, *cases_ages]
+            new_line = [time, region, *cases_ages]
             cases_by_age_erva.append(new_line)
 
     age_groups = MAPPINGS['age_groups'][number_age_groups]['names']
-    columns = ['Time', 'erva']
+    columns = ['Time', 'region']
     for age_i in age_groups:
         columns.append(age_i)
     cases_by_age_erva = pd.DataFrame(data=cases_by_age_erva, columns=columns)

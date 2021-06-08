@@ -7,16 +7,17 @@ import pandas as pd
 import numpy as np
 from env_var import EPIDEMIC
 from fetch_data import (
-    construct_cases_age_erva_daily, static_population_erva_age,
+    construct_cases_age_region_daily, static_population_region_age,
     construct_thl_vaccines_erva_daily, construct_hs_hosp_age_erva
 )
 
 
-def compartment_values_daily(logger, erva_pop_file, filename=None,
-                             number_age_groups=9):
+def compartment_values_daily(logger, region_pop_file, number_age_groups,
+                             region, filename=None):
     logger.info('Calculating epidemic compartments')
-    cases_by_age_erva = construct_cases_age_erva_daily(logger,
-                                                       number_age_groups=number_age_groups)
+    cases_by_age_region = construct_cases_age_region_daily(logger,
+                                                           region=region,
+                                                           number_age_groups=number_age_groups)
 
     inf_period = (EPIDEMIC['T_I'])**(-1)
     inf_period = int(inf_period)
@@ -26,35 +27,35 @@ def compartment_values_daily(logger, erva_pop_file, filename=None,
                                                               lat_period))
     a = EPIDEMIC['unreported_exponent']
 
-    cases_by_age_erva.sort_values(['Time', 'erva'])
-    dates = pd.unique(cases_by_age_erva['Time'])
-    ervas = pd.unique(cases_by_age_erva['erva'])
-    num_ervas = len(ervas)
-    logger.debug(ervas)
-    ages_names = cases_by_age_erva.columns[2:]
+    cases_by_age_region.sort_values(['Time', 'region'])
+    dates = pd.unique(cases_by_age_region['Time'])
+    regions = pd.unique(cases_by_age_region['region'])
+    num_regions = len(regions)
+    logger.debug('Constructing cases for: %s' % (regions, ))
+    ages_names = cases_by_age_region.columns[2:]
 
-    cases_erva_age_npy = cases_by_age_erva.values
-    cases_erva_age_npy = cases_erva_age_npy[:, 2:]
-    dates_ervas, ages = cases_erva_age_npy.shape
-    assert dates_ervas % num_ervas == 0
-    days = int(dates_ervas/num_ervas)
-    cases_erva_age_npy = cases_erva_age_npy.reshape(days, num_ervas, ages)
+    cases_region_age_npy = cases_by_age_region.values
+    cases_region_age_npy = cases_region_age_npy[:, 2:]
+    dates_region, ages = cases_region_age_npy.shape
+    assert dates_region % num_regions == 0
+    days = int(dates_region/num_regions)
+    cases_region_age_npy = cases_region_age_npy.reshape(days, num_regions, ages)
 
     assert len(ages_names) == ages
     assert len(dates) == days
 
-    infectious_detected = np.zeros_like(cases_erva_age_npy)
-    recovered_detected = np.zeros_like(cases_erva_age_npy)
+    infectious_detected = np.zeros_like(cases_region_age_npy)
+    recovered_detected = np.zeros_like(cases_region_age_npy)
     lookback_period = inf_period + lat_period
     for day_t in range(days):
         omega = day_t - lookback_period + 1
         if omega < 0:
             omega = 0
-        cases_in_period = cases_erva_age_npy[omega:day_t+1, ]
+        cases_in_period = cases_region_age_npy[omega:day_t+1, ]
         # Get the total infected in the period and assign to time t
         infectious_detected[day_t, ] = cases_in_period.sum(axis=0)
 
-        recovered_period = cases_erva_age_npy[:omega, ]
+        recovered_period = cases_region_age_npy[:omega, ]
         recovered_detected[day_t, ] = recovered_period.sum(axis=0)
 
     k = np.arange(ages) + 1
@@ -74,35 +75,36 @@ def compartment_values_daily(logger, erva_pop_file, filename=None,
     exposed_real = (lat_period/lookback_period)*infected_total
 
     # Getting the population to get the final Susceptibles
-    pop_ervas, _ = static_population_erva_age(logger, erva_pop_file,
-                                              number_age_groups=number_age_groups)
-    pop_ervas = pop_ervas[~pop_ervas['erva'].str.contains('All')]
-    pop_ervas = pop_ervas.sort_values(['erva', 'age_group'])
-    pop_ervas_npy = pop_ervas['Total'].values
-    pop_ervas_npy = pop_ervas_npy.reshape(num_ervas, ages)
+    pop_regions, _ = static_population_region_age(logger,
+                                                  csv_file=region_pop_file,
+                                                  number_age_groups=number_age_groups)
+    pop_regions = pop_regions[~pop_regions['region'].str.contains('All')]
+    pop_regions = pop_regions.sort_values(['region', 'age_group'])
+    pop_regions_npy = pop_regions['Total'].values
+    pop_regions_npy = pop_regions_npy.reshape(num_regions, ages)
 
     # To prepare for broadcasting operation
-    pop_ervas_npy = pop_ervas_npy[np.newaxis, :]
+    pop_regions_npy = pop_regions_npy[np.newaxis, :]
 
-    susceptible = np.zeros_like(cases_erva_age_npy)
-    susceptible = pop_ervas_npy - exposed_real - infected_real - recovered_total
+    susceptible = np.zeros_like(cases_region_age_npy)
+    susceptible = pop_regions_npy - exposed_real - infected_real - recovered_total
 
     complete_dataframe = pd.DataFrame()
-    for erva_i, erva_name in enumerate(ervas):
+    for reg_i, reg_name in enumerate(regions):
         for age_i, age_name in enumerate(ages_names):
             dataframe_data = {
                 'date': dates,
-                'erva': [erva_name]*days,
+                'region': [reg_name]*days,
                 'age': [age_name]*days,
-                'susceptible': susceptible[:, erva_i, age_i],
-                'infected detected': infectious_detected[:, erva_i, age_i],
-                'infected undetected': infectious_undetected[:, erva_i, age_i],
-                'infected': infected_real[:, erva_i, age_i],
-                'exposed': exposed_real[:, erva_i, age_i],
-                'recovered': recovered_total[:, erva_i, age_i],
+                'susceptible': susceptible[:, reg_i, age_i],
+                'infected detected': infectious_detected[:, reg_i, age_i],
+                'infected undetected': infectious_undetected[:, reg_i, age_i],
+                'infected': infected_real[:, reg_i, age_i],
+                'exposed': exposed_real[:, reg_i, age_i],
+                'recovered': recovered_total[:, reg_i, age_i],
             }
-            erva_age_dataframe = pd.DataFrame(data=dataframe_data)
-            complete_dataframe = complete_dataframe.append(erva_age_dataframe)
+            region_age_dataframe = pd.DataFrame(data=dataframe_data)
+            complete_dataframe = complete_dataframe.append(region_age_dataframe)
 
     if filename is not None:
         complete_dataframe.to_csv(filename, index=False)
@@ -116,7 +118,9 @@ def full_epidemic_state_finland(logger, region_pop_file, region, filename,
     logger.info('Getting complete state of epidemic with '
                 'epidemic compartments, vaccines and hospitalizations')
     logger.info('Number of age groups: %d' % (number_age_groups))
-    compart_df = compartment_values_daily(logger, erva_pop_file,
+    compart_df = compartment_values_daily(logger,
+                                          region_pop_file=region_pop_file,
+                                          region=region,
                                           number_age_groups=number_age_groups)
     logger.info('Epidemic compartments gotten.')
     vacc_df = construct_thl_vaccines_erva_daily(logger,
