@@ -297,7 +297,6 @@ def bound_f(bound_full_orig, u_op):
                 if S_g[g, k, i] <= 0 or np.isclose(S_g[g, k, i], 0, atol=1e-2):
                     if (g, k) not in kg_pairs:
                         logger.info('Found KG pair %s at time %s' % ((g, k), i))
-                        bound_r[g, k, i-1] = S_g[g, k, i-1] - L_g[g, k, i-1]*S_g[g, k, i-1]
                         bound_r[g, k, i:] = 0.0
                         kg_pairs.append((g, k))
 
