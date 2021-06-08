@@ -87,7 +87,7 @@ def parse_args(args=sys.argv[1:]):
                         help='If set just a quick execution is ran.')
 
     parser.add_argument("--log_file", type=str,
-                        default='optimized_vaccination.log',
+                        default='logs_optimized_vaccination.log',
                         help="Logging file.")
 
     parser.add_argument("--log_level", type=str,

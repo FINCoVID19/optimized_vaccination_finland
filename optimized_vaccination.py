@@ -8,7 +8,9 @@ from multiprocessing import Pool
 import numpy as np
 from scipy.optimize import Bounds
 from scipy.optimize import minimize
-from utils_optimize import log_out_minimize, create_logger, parse_args
+from utils_optimized_vaccination import (
+    log_out_minimize, create_logger, parse_args
+)
 from env_var import EPIDEMIC
 from forward_integration import get_model_parameters, read_initial_values
 
