@@ -91,12 +91,12 @@ def sol(u_con, mob_av, beta, beta_gh, T, pop_hat, age_er, epidemic_npy, return_s
 
         L_g[:, :, j] = beta*lambda_g
 
-        u[:, :, j] = np.minimum(u_con[:, :, j], np.maximum(0.0, S_g[:, :, j] - beta*lambda_g*S_g[:, :, j]))
-        S_g[:, :, j+1] = S_g[:, :, j] - beta*lambda_g*S_g[:, :, j] - u[:, :, j]
-        S_vg[:, :, j+1] = S_vg[:, :, j] - beta*lambda_g*S_vg[:, :, j] + u[:, :, j] - T_V*S_vg[:, :, j]
-        S_xg[:, :, j+1] = S_xg[:, :, j] - beta*lambda_g*S_xg[:, :, j] + (1.-alpha*e)*T_V*S_vg[:, :, j]
+        u[:, :, j] = np.minimum(u_con[:, :, j], np.maximum(0.0, S_g[:, :, j] - L_g[:, :, j]*S_g[:, :, j]))
+        S_g[:, :, j+1] = S_g[:, :, j] - L_g[:, :, j]*S_g[:, :, j] - u[:, :, j]
+        S_vg[:, :, j+1] = S_vg[:, :, j] - L_g[:, :, j]*S_vg[:, :, j] + u[:, :, j] - T_V*S_vg[:, :, j]
+        S_xg[:, :, j+1] = S_xg[:, :, j] - L_g[:, :, j]*S_xg[:, :, j] + (1.-alpha*e)*T_V*S_vg[:, :, j]
         V_g[:, :, j+1] = V_g[:, :, j] + alpha*e*T_V*S_vg[:, :, j]
-        E_g[:, :, j+1] = E_g[:, :, j] + beta*lambda_g*(S_g[:, :, j]+S_vg[:, :, j] + S_xg[:, :, j]) - T_E*E_g[:, :, j]
+        E_g[:, :, j+1] = E_g[:, :, j] + L_g[:, :, j]*(S_g[:, :, j]+S_vg[:, :, j] + S_xg[:, :, j]) - T_E*E_g[:, :, j]
         I_g[:, :, j+1] = I_g[:, :, j] + T_E*E_g[:, :, j] - T_I*I_g[:, :, j]
         Q_0g[:, :, j+1] = Q_0g[:, :, j] + (1-p_H_ages)*T_I*I_g[:, :, j] - T_q0*Q_0g[:, :, j]
         Q_1g[:, :, j+1] = Q_1g[:, :, j] + p_H_ages*T_I*I_g[:, :, j] - T_q1*Q_1g[:, :, j]
@@ -113,7 +113,7 @@ def sol(u_con, mob_av, beta, beta_gh, T, pop_hat, age_er, epidemic_npy, return_s
     infect_mobility = (I_g[:, :, T-1]*age_er_t)@mobility_term.T
     lambda_g = beta_gh.T@infect_mobility
     L_g[:, :, T-1] = beta*lambda_g
-    u[:, :, T-1] = np.minimum(u_con[:, :, T-1], np.maximum(0.0, S_g[:, :, T-1] - beta*lambda_g*S_g[:, :, T-1]))
+    u[:, :, T-1] = np.minimum(u_con[:, :, T-1], np.maximum(0.0, S_g[:, :, T-1] - L_g[:, :, T-1]*S_g[:, :, T-1]))
     
     # D_d[:, :, T-1] = T_q1*Q_1g[:, :, T-1]*age_er_t
     D_d = D_d*age_er_t[:, :, np.newaxis]
@@ -285,7 +285,8 @@ def bound_f(bound_full_orig, u_op):
     for i in range(T):
         for g in range(N_g-1, -1, -1):
             for k in range(N_p):
-                if S_g[g, k, i] <= 0:
+                # If Susc below 0 or close to 0
+                if S_g[g, k, i] <= 0 or np.isclose(S_g[g, k, i], 0, atol=1e-2):
                     if (g, k) not in kg_pairs:
                         logger.info('Found KG pair %s at time %s' % ((g, k), i))
                         bound_r[g, k, i-1] = S_g[g, k, i-1] - L_g[g, k, i-1]*S_g[g, k, i-1]
@@ -379,7 +380,7 @@ def optimize(epidemic_npy_complete, max_execution_hours):
             break
 
         # Tolerance to 3 decimal places
-        if np.allclose(last_values[-3:], D_d, rtol=0, atol=1e-3):
+        if np.allclose(last_values[-3:], D_d, atol=1e-3):
             logger.info('Last iterations results converged, breaking.')
             break
 
