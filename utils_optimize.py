@@ -22,7 +22,7 @@ def log_out_minimize(minimize_result):
     return result_str
 
 
-def create_logger(log_level=logging.DEBUG):
+def create_logger(log_file, log_level=logging.DEBUG):
     logger = multiprocessing.get_logger()
     logger.setLevel(log_level)
     formatter = logging.Formatter(
@@ -30,7 +30,7 @@ def create_logger(log_level=logging.DEBUG):
         datefmt='%m/%d/%Y %H:%M:%S %p'
     )
     handler_file = logging.handlers.RotatingFileHandler(
-                    'optimized_vaccination.log',
+                    log_file,
                     maxBytes=100e6,
                     backupCount=5
                     )
@@ -86,7 +86,11 @@ def parse_args(args=sys.argv[1:]):
     parser.add_argument('--test', action='store_true',
                         help='If set just a quick execution is ran.')
 
-    parser.add_argument("--log_level", "-ll", type=str,
+    parser.add_argument("--log_file", type=str,
+                        default='optimized_vaccination.log',
+                        help="Logging file.")
+
+    parser.add_argument("--log_level", type=str,
                         default='INFO',
                         choices=["CRITICAL", "ERROR", "WARNING", "INFO", "DEBUG"],
                         help="Set logging level.")

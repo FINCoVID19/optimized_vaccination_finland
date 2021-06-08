@@ -246,7 +246,7 @@ def back_int(S_g, S_vg, S_xg, L_g, beta_gh, beta, T, age_er, mob_av, pop_hat):
 
 
 def ob_fun(x):
-    logger = create_logger(log_level)
+    logger = create_logger(log_file, log_level)
     start_obj = time.time()
 
     nuf = np.reshape(x, (N_g, N_p, T))
@@ -263,7 +263,7 @@ def ob_fun(x):
 
 
 def der(x):
-    logger = create_logger(log_level)
+    logger = create_logger(log_file, log_level)
     start_der = time.time()
 
     nuf = np.reshape(x, (N_g, N_p, T))
@@ -282,7 +282,7 @@ def der(x):
 
 
 def bound_f(bound_full_orig, u_op):
-    logger = create_logger(log_level)
+    logger = create_logger(log_file, log_level)
     bound_r = np.reshape(bound_full_orig, (N_g, N_p, T))
     S_g, S_vg, S_xg, L_g, D_d, _, _ = sol(u_op, mob_av, beta, beta_gh, T,
                                           pop_hat, age_er, epidemic_npy, False)
@@ -296,7 +296,7 @@ def bound_f(bound_full_orig, u_op):
                     if (g, k) not in kg_pairs:
                         logger.info('Found KG pair %s at time %s' % ((g, k), i))
                         bound_r[g, k, i-1] = S_g[g, k, i-1] - L_g[g, k, i-1]*S_g[g, k, i-1]
-                        bound_r[g, k, i:T] = 0.0
+                        bound_r[g, k, i:] = 0.0
                         kg_pairs.append((g, k))
 
     bound_rf = np.reshape(bound_r, N_g*N_p*T)
@@ -305,7 +305,7 @@ def bound_f(bound_full_orig, u_op):
 
 
 def optimize(epidemic_npy_complete, max_execution_hours):
-    logger = create_logger(log_level)
+    logger = create_logger(log_file, log_level)
 
     # number of optimization variables
     N_f = N_g*N_p
@@ -415,7 +415,7 @@ def optimize(epidemic_npy_complete, max_execution_hours):
 
 def full_optimize(r, tau, time_horizon, init_time, max_execution_hours,
                   total_time, num_age_groups, num_regions, hosp_optim_in):
-    logger = create_logger(log_level)
+    logger = create_logger(log_file, log_level)
 
     global t0
     t0 = init_time
@@ -557,11 +557,13 @@ def full_optimize(r, tau, time_horizon, init_time, max_execution_hours,
 
 
 def run_optimize(r, tau, time_horizon, init_time, total_time, log_level_in,
-                 hosp_optim, max_execution_hours):
+                 hosp_optim, max_execution_hours, log_file_in):
     multiprocessing.current_process().name = 'WorkerFor-R_%s-Tau_%s' % (r, tau)
     global log_level
     log_level = log_level_in
-    logger = create_logger(log_level)
+    global log_file
+    log_file = log_file_in
+    logger = create_logger(log_file, log_level)
     try:
         start_time = time.time()
         logger.info('Starting. R: %s. Tau: %s. T: %s. T0: %s' % (r,
@@ -600,7 +602,8 @@ def run_optimize(r, tau, time_horizon, init_time, total_time, log_level_in,
 def run_parallel_optimizations():
     args = parse_args()
     log_level = getattr(logging, args.log_level, None)
-    logger = create_logger(log_level)
+    log_file = args.log_file
+    logger = create_logger(log_file, log_level)
     logger.info('Logger for optimized_vaccination configured.')
     if args.test:
         time_horizon = 10
@@ -649,11 +652,22 @@ def run_parallel_optimizations():
     logger.info('Running %s experiments with %s CPUS.' % (num_experiments, num_cpus))
     with Pool(processes=num_cpus) as pool:
         # Calling the function to execute simulations in asynchronous way
-        async_res = [pool.apply_async(func=run_optimize,
-                                      args=(r, tau, time_horizon, init_time,
-                                            total_time, log_level, hosp_optim,
-                                            args.max_execution_hours))
-                     for r, tau in all_experiments]
+        async_res = [
+                        pool.apply_async(
+                            func=run_optimize,
+                            kwds={
+                                'r': r,
+                                'tau': tau,
+                                'time_horizon': time_horizon,
+                                'init_time': init_time,
+                                'total_time': total_time,
+                                'log_level_in': log_level,
+                                'hosp_optim': hosp_optim,
+                                'max_execution_hours': args.max_execution_hours,
+                                'log_file_in': log_file 
+                            })
+                        for r, tau in all_experiments
+                    ]
 
         # Waiting for the values of the async execution
         for res in async_res:
