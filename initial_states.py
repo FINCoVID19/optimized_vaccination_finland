@@ -8,7 +8,7 @@ import numpy as np
 from env_var import EPIDEMIC
 from fetch_data import (
     construct_cases_age_region_daily, static_population_region_age,
-    construct_thl_vaccines_region_daily, construct_hs_hosp_age_erva
+    construct_thl_vaccines_region_daily, construct_hs_hosp_age_region
 )
 
 
@@ -127,22 +127,24 @@ def full_epidemic_state_finland(logger, region_pop_file, region, filename,
                                                   region=region,
                                                   number_age_groups=number_age_groups)
     logger.info('Number of vaccinated gotten.')
-    hosp_df = construct_hs_hosp_age_erva(logger, number_age_groups=number_age_groups)
+    hosp_df = construct_hs_hosp_age_region(logger,
+                                           region=region,
+                                           number_age_groups=number_age_groups)
     logger.info('Number of hospitalizations gotten.')
     epidemic_state = pd.merge(compart_df, vacc_df,
-                              on=['date', 'erva', 'age'],
+                              on=['date', 'region', 'age'],
                               how='left')
     epidemic_state = pd.merge(epidemic_state, hosp_df,
-                              on=['date', 'erva', 'age'],
+                              on=['date', 'region', 'age'],
                               how='left')
     # Merge will left missing values with NaNs. Filled them with 0
     epidemic_state = epidemic_state.fillna(0)
 
     if init_vacc:
-        epidemic_state['First dose cumulative'] = epidemic_state.groupby(['erva', 'age'])['First dose'].cumsum()
+        epidemic_state['First dose cumulative'] = epidemic_state.groupby(['region', 'age'])['First dose'].cumsum()
         epidemic_state['vaccinated'] = e*epidemic_state['First dose cumulative']
         epidemic_state['vaccinated no imm'] = (1-e)*epidemic_state['First dose cumulative']
-        epidemic_state['Second dose cumulative'] = epidemic_state.groupby(['erva', 'age'])['Second dose'].cumsum()
+        epidemic_state['Second dose cumulative'] = epidemic_state.groupby(['region', 'age'])['Second dose'].cumsum()
     else:
         epidemic_state['First dose cumulative'] = 0
         epidemic_state['Second dose cumulative'] = 0

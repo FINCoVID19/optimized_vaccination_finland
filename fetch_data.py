@@ -136,37 +136,37 @@ def fetch_hs_hospitalizations(logger):
     hospital_df = pd.DataFrame(hospitalizations)
 
     hospital_df = hospital_df[~hospital_df['area'].str.contains('Finland')]
-    hospital_df.columns = ['date', 'erva', 'hospitalized', 'ward', 'icu', 'dead']
+    hospital_df.columns = ['date', 'region', 'hospitalized', 'ward', 'icu', 'dead']
 
     hospital_df['date'] = hospital_df.apply(
                             lambda row: row['date'].split('T')[0],
                             axis=1
                           )
-    hospital_df = hospital_df.sort_values(['date', 'erva'])
+    hospital_df = hospital_df.sort_values(['date', 'region'])
 
     return hospital_df
 
 
-def construct_hs_hosp_age_erva(logger, number_age_groups=9):
-    logger.info('Constructing hospitalizations by age and erva (daily)')
+def construct_hs_hosp_age_region(logger, number_age_groups, region):
+    logger.info('Constructing hospitalizations by age and region (daily)')
 
-    hosp_by_erva = fetch_hs_hospitalizations(logger)
+    hosp_by_region = fetch_hs_hospitalizations(logger)
     age_groups = MAPPINGS['age_groups'][number_age_groups]['names']
     probs_age_icu = EPIDEMIC['proportion_icu_age'][number_age_groups]
     probs_age_ward = EPIDEMIC['proportion_ward_age'][number_age_groups]
     probs_age_death = EPIDEMIC['proportion_deaths_age'][number_age_groups]
 
-    hosp_by_erva_list = hosp_by_erva.values
-    dates = np.unique(hosp_by_erva_list[:, 0])
+    hosp_by_region_list = hosp_by_region.values
+    dates = np.unique(hosp_by_region_list[:, 0])
     curr_date = datetime.datetime.strptime(dates[0], "%Y-%m-%d")
     last_date = datetime.datetime.strptime(dates[-1], "%Y-%m-%d")
-    ervas = np.unique(hosp_by_erva_list[:, 1])
+    regions = np.unique(hosp_by_region_list[:, 1])
 
-    header = 'date;erva;age;ward;icu;death'
+    header = 'date;region;age;ward;icu;death'
     final_lines = [header, ]
     while curr_date <= last_date:
         day_of_week = curr_date.weekday()
-        for erva in ervas:
+        for region in regions:
             # If we are on weekend
             if day_of_week == 5:
                 friday_date = curr_date - datetime.timedelta(days=1)
@@ -178,23 +178,23 @@ def construct_hs_hosp_age_erva(logger, number_age_groups=9):
                 use_date = curr_date.strftime("%Y-%m-%d")
 
             date = curr_date.strftime("%Y-%m-%d")
-            values_day_erva = hosp_by_erva_list[np.where((
-                                hosp_by_erva_list[:, 0] == use_date) & (hosp_by_erva_list[:, 1] == erva)
+            values_day_region = hosp_by_region_list[np.where((
+                                hosp_by_region_list[:, 0] == use_date) & (hosp_by_region_list[:, 1] == region)
                               )]
-            ward_day_erva = 0 if len(values_day_erva[:, 3]) == 0 else values_day_erva[:, 3].item()
-            icu_day_erva = 0 if len(values_day_erva[:, 4]) == 0 else values_day_erva[:, 4].item()
-            death_day_erva = 0 if len(values_day_erva[:, 5]) == 0 else values_day_erva[:, 5].item()
+            ward_day_region = 0 if len(values_day_region[:, 3]) == 0 else values_day_region[:, 3].item()
+            icu_day_region = 0 if len(values_day_region[:, 4]) == 0 else values_day_region[:, 4].item()
+            death_day_region = 0 if len(values_day_region[:, 5]) == 0 else values_day_region[:, 5].item()
 
-            ward_age_day_erva = ward_day_erva*probs_age_ward
-            icu_age_day_erva = icu_day_erva*probs_age_icu
-            death_age_day_erva = death_day_erva*probs_age_death
+            ward_age_day_region = ward_day_region*probs_age_ward
+            icu_age_day_region = icu_day_region*probs_age_icu
+            death_age_day_region = death_day_region*probs_age_death
             for i, group in enumerate(age_groups):
                 line = [date,
-                        erva,
+                        region,
                         group,
-                        str(ward_age_day_erva[i]),
-                        str(icu_age_day_erva[i]),
-                        str(death_age_day_erva[i])]
+                        str(ward_age_day_region[i]),
+                        str(icu_age_day_region[i]),
+                        str(death_age_day_region[i])]
                 line_str = ';'.join(line)
                 final_lines.append(line_str)
         curr_date = curr_date + datetime.timedelta(days=1)
