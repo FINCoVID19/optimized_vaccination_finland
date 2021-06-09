@@ -424,9 +424,6 @@ def full_optimize(r, tau, time_horizon, init_time, max_execution_hours,
     global N_g
     N_g = num_age_groups
 
-    global N_p
-    N_p = num_regions
-
     global hosp_optim
     hosp_optim = hosp_optim_in
 
@@ -435,15 +432,18 @@ def full_optimize(r, tau, time_horizon, init_time, max_execution_hours,
                   'tau: %s\n'
                   't0: %s\n'
                   'N_g: %s\n'
-                  'N_p: %s') % (r, tau, t0, N_g, N_p))
+                  'Region: %s') % (r, tau, t0, N_g, region))
     global mob_av, beta_gh, pop_hat, age_er
-    mob_av, beta_gh, pop_hat, age_er, rho = get_model_parameters(
+    mob_av, beta_gh, pop_hat, age_er, rho, num_regions = get_model_parameters(
                                                 number_age_groups=num_age_groups,
-                                                num_regions=num_regions,
+                                                region=region,
                                                 init_vacc=True,
                                                 t0=init_time,
                                                 tau=tau
                                             )
+    global N_p
+    N_p = num_regions
+
     global beta
     beta = r/rho
 
@@ -614,7 +614,7 @@ def run_parallel_optimizations():
         taus = [0.5]
         r_experiments = [1.5]
         hosp_optim = False
-        region = 'erva'
+        region = 'hcd'
         num_age_groups = 9
     else:
         time_horizon = args.part_time

@@ -2,11 +2,9 @@ import os
 import numpy as np
 import pandas as pd
 import logging
-from fetch_data import (
-    static_population_erva_age,
-)
+from fetch_data import static_population_region_age
 from scipy.linalg import eigvals
-from env_var import EPIDEMIC
+from env_var import EPIDEMIC, MAPPINGS
 
 
 def forward_integration(u_con, c1, beta, c_gh, T, pop_hat, age_er,
@@ -294,30 +292,36 @@ def read_initial_values(age_er, init_vacc, t0):
     return epidemic_npy
 
 
-def get_model_parameters(number_age_groups, num_regions, init_vacc, t0, tau):
+def get_model_parameters(number_age_groups, region, init_vacc, t0, tau):
     logger = logging.getLogger()
     dir_path = os.path.dirname(os.path.realpath(__file__))
 
-    pop_file = os.path.join(dir_path, 'stats', 'erva_population_age_2020.csv')
-    pop_regions_age, _ = static_population_erva_age(logger, pop_file,
-                                                    number_age_groups=number_age_groups)
-    pop_regions_age = pop_regions_age[~pop_regions_age['erva'].str.contains('All')]
-    pop_regions_age = pop_regions_age[~pop_regions_age['erva'].str.contains('land')]
-    pop_regions_age = pop_regions_age.sort_values(['erva', 'age_group'])
+    pop_filename = '%s_population_age_2020.csv' % (region, )
+    pop_file = os.path.join(dir_path, 'stats', pop_filename)
+    pop_regions_age, _ = static_population_region_age(logger,
+                                                      csv_file=pop_file,
+                                                      number_age_groups=number_age_groups)
+    pop_regions_age = pop_regions_age[pop_regions_age['region'] != 'All']
+    pop_regions_age = pop_regions_age[pop_regions_age['region'] != 'Åland']
+    pop_regions_age = pop_regions_age.sort_values(['region', 'age_group'])
     pop_regions_npy = pop_regions_age['Total'].values
+
+    regions_in_df = list(pd.unique(pop_regions_age['region']))
+    num_regions = len(regions_in_df)
     pop_regions_npy = pop_regions_npy.reshape(num_regions, number_age_groups)
+    region_order = EPIDEMIC['region_order'][region]
 
-    ervas_order = EPIDEMIC['ervas_order']
+    assert len(region_order) == num_regions
 
-    ervas_df = list(pd.unique(pop_regions_age['erva']))
-    ervas_pd_order = [ervas_df.index(erva) for erva in ervas_order]
+    region_df_pop_order = [regions_in_df.index(reg) for reg in region_order]
     # Rearrange rows in the correct order
-    age_er = pop_regions_npy[ervas_pd_order, :]
+    age_er = pop_regions_npy[region_df_pop_order, :]
 
     if init_vacc:
-        csv_name = 'epidemic_finland_%d.csv' % (number_age_groups, )
+        csv_name = 'epidemic_finland_%s_%s.csv' % (number_age_groups, region)
     else:
-        csv_name = 'epidemic_finland_%d_no_vacc.csv' % (number_age_groups, )
+        csv_name = 'epidemic_finland_%s_%s_no_vacc.csv' % (number_age_groups,
+                                                           region)
     csv_name = os.path.join(dir_path, 'out', csv_name)
 
     # Reading CSV
@@ -325,11 +329,11 @@ def get_model_parameters(number_age_groups, num_regions, init_vacc, t0, tau):
     # Getting only date t0
     epidemic_zero = epidemic_csv.loc[epidemic_csv['date'] == t0, :]
     # Removing Ahvenanmaa or Aland
-    epidemic_zero = epidemic_zero[~epidemic_zero['erva'].str.contains('land')]
+    epidemic_zero = epidemic_zero[epidemic_zero['region'] != 'Åland']
 
     # Getting the order the ervas have inside the dataframe
-    ervas_df = list(pd.unique(epidemic_zero['erva']))
-    ervas_pd_order = [ervas_df.index(erva) for erva in ervas_order]
+    regions_in_df = list(pd.unique(epidemic_zero['region']))
+    regions_df_ep_order = [regions_in_df.index(reg) for reg in region_order]
 
     select_columns = ['susceptible',
                       'vaccinated no imm']
@@ -342,21 +346,45 @@ def get_model_parameters(number_age_groups, num_regions, init_vacc, t0, tau):
     epidemic_npy = epidemic_npy.astype(np.float64)
     epidemic_sus = epidemic_npy.sum(axis=2)
 
-    epidemic_sus = epidemic_sus.reshape(num_regions, number_age_groups)
+    assert epidemic_sus.shape == (num_regions, number_age_groups)
 
     # Rearranging the order of the matrix with correct order
-    epidemic_sus = epidemic_sus[ervas_pd_order, :]
-    # age_er = epidemic_sus
+    epidemic_sus = epidemic_sus[regions_df_ep_order, :]
 
     pop_region = age_er.sum(axis=1)
 
     # Contact matrix
     c_gh_3 = EPIDEMIC['contact_matrix'][number_age_groups]
 
-    # Mobility matrix
-    m_av = EPIDEMIC['mobility_matrix'][num_regions]
+    # Read mobility matrix
+    mobility_filename = '%s_mobility_2019.csv' % (region, )
+    mobility_file = os.path.join(dir_path, 'stats', mobility_filename)
+    if region == 'erva':
+        region_order_mob = region_order
+        omit_aland = 'Åland'
+    elif region == 'hcd':
+        region_order_mob = [MAPPINGS['hcd_name_hcd_code'][reg] for reg in region_order]
+        omit_aland = MAPPINGS['hcd_name_hcd_code']['Åland']
+    else:
+        raise ValueError('Invalid region: %s' % (region, ))
+    mobility_df = pd.read_csv(mobility_file)
+    mobility_df = mobility_df[mobility_df['origin'] != omit_aland]
+    mobility_df = mobility_df[mobility_df['dest'] != omit_aland]
 
-    m_av = m_av/pop_region[:, np.newaxis]
+    mobility_matrix = []
+    for orig in region_order_mob:
+        row_values = []
+        for dest in region_order_mob:
+            trips_val = mobility_df.loc[
+                            (mobility_df['origin'] == orig) &
+                            (mobility_df['dest'] == dest), 'trips_sum'
+                        ]
+            trips_val = np.around(trips_val)
+            row_values.append(trips_val.item())
+        mobility_matrix.append(np.array(row_values))
+    mobility_matrix = np.array(mobility_matrix)
+
+    m_av = mobility_matrix/pop_region[:, np.newaxis]
 
     # theta_km
     N_p = num_regions
@@ -383,7 +411,7 @@ def get_model_parameters(number_age_groups, num_regions, init_vacc, t0, tau):
 
         pop_hat[m] = m_k
 
-    # Population size per age group in all ervas
+    # Population size per age group in all regions
     age_pop = sum(age_er)
 
     # Computing beta_gh for force of infection
@@ -428,4 +456,4 @@ def get_model_parameters(number_age_groups, num_regions, init_vacc, t0, tau):
     eig_vals = eigvals(next_gen_matrix)
     rho = np.abs(np.amax(eig_vals))
 
-    return mob_av, beta_gh, pop_hat, age_er, rho
+    return mob_av, beta_gh, pop_hat, age_er, rho, num_regions
