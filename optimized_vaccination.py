@@ -146,7 +146,13 @@ def sol(u_con, mob_av, beta, beta_gh, T, pop_hat, age_er, epidemic_npy, return_s
     new_epidemic_npy[:, :, 11] = H_rg[:, :, T-1]
     new_epidemic_npy[:, :, 12] = S_vg[:, :, T-1]
 
-    return D_d.sum(), u, new_epidemic_npy
+    final_susc = new_epidemic_npy[:, :, 0]
+    empty_susc = np.where(np.isclose(final_susc, 0, atol=1e-2))
+    ages = empty_susc[0]
+    regions = empty_susc[1]
+    kg_pairs = [(k.item(), g.item()) for k, g in zip(ages, regions)]
+
+    return D_d.sum(), u, new_epidemic_npy, kg_pairs
 
 
 def back_int(S_g, S_vg, S_xg, L_g, beta_gh, beta, T, age_er, mob_av, pop_hat):
@@ -393,16 +399,15 @@ def optimize(epidemic_npy_complete, max_execution_hours):
 
         last_values = np.concatenate((last_values, [D_d]))
 
-    D_d, u_op, new_epidemic_npy = sol(u_con=u_op,
-                                      mob_av=mob_av,
-                                      beta=beta,
-                                      beta_gh=beta_gh,
-                                      T=T,
-                                      pop_hat=pop_hat,
-                                      age_er=age_er,
-                                      epidemic_npy=epidemic_npy,
-                                      return_states=True)
-
+    D_d, u_op, new_epidemic_npy, kg_pairs = sol(u_con=u_op,
+                                                mob_av=mob_av,
+                                                beta=beta,
+                                                beta_gh=beta_gh,
+                                                T=T,
+                                                pop_hat=pop_hat,
+                                                age_er=age_er,
+                                                epidemic_npy=epidemic_npy,
+                                                return_states=True)
     logger.info(('Finished iterations.\n'
                  'value: %s.\n'
                  'KG pairs: %s.') % (D_d, kg_pairs))
@@ -453,6 +458,7 @@ def full_optimize(r, tau, time_horizon, init_time, max_execution_hours,
     age_er_ext = age_er.T[:, :, np.newaxis]
 
     epidemic_npy = read_initial_values(age_er=age_er,
+                                       region=region,
                                        init_vacc=True,
                                        t0=t0)
     _, _, columns = epidemic_npy.shape
@@ -465,7 +471,7 @@ def full_optimize(r, tau, time_horizon, init_time, max_execution_hours,
     T = time_horizon
     logger.info('Time horizon for optimizations: %s' % (T, ))
 
-    base_name = 'R_%s_tau_%s_t0_%s_T_%s' % (r, tau, t0, total_time)
+    base_name = '%s_R_%s_tau_%s_t0_%s_T_%s' % (region, r, tau, t0, total_time)
     dir_path = os.path.dirname(os.path.realpath(__file__))
     results_path = os.path.join(dir_path, 'out', 'results_optim')
     os.makedirs(results_path, exist_ok=True)
@@ -511,15 +517,15 @@ def full_optimize(r, tau, time_horizon, init_time, max_execution_hours,
     u_op_day = u_op_day.sum(axis=(0, 1))
     logger.debug('u_total vaccination/day:\n%s' % (u_op_day, ))
 
-    D_d, u_op, new_epidemic_npy = sol(u_con=u_total,
-                                      mob_av=mob_av,
-                                      beta=beta,
-                                      beta_gh=beta_gh,
-                                      T=total_time,
-                                      pop_hat=pop_hat,
-                                      age_er=age_er,
-                                      epidemic_npy=initial_epidemic_npy,
-                                      return_states=True)
+    D_d, u_op, new_epidemic_npy, kg_pairs = sol(u_con=u_total,
+                                                mob_av=mob_av,
+                                                beta=beta,
+                                                beta_gh=beta_gh,
+                                                T=total_time,
+                                                pop_hat=pop_hat,
+                                                age_er=age_er,
+                                                epidemic_npy=initial_epidemic_npy,
+                                                return_states=True)
     u_op_filename = '%s_u_op.npy' % (base_name, )
     u_op_file_path = os.path.join(results_path, u_op_filename)
     initial_epi_filename = '%s_initial_epidemic.npy' % (base_name, )
@@ -539,6 +545,7 @@ def full_optimize(r, tau, time_horizon, init_time, max_execution_hours,
     json_save['t0'] = t0
     json_save['T'] = T
     json_save['total_time'] = total_time
+    json_save['kg_pairs'] = kg_pairs
 
     with open(json_file_path, 'w', encoding='utf-8') as f:
         json.dump(json_save, f, indent=2)
@@ -560,7 +567,7 @@ def full_optimize(r, tau, time_horizon, init_time, max_execution_hours,
 def run_optimize(r, tau, time_horizon, init_time, total_time, log_level_in,
                  hosp_optim, max_execution_hours, log_file_in, region,
                  num_age_groups):
-    multiprocessing.current_process().name = 'WorkerFor-R_%s-Tau_%s' % (r, tau)
+    multiprocessing.current_process().name = 'Worker-%s-R_%s-Tau_%s' % (region, r, tau)
     global log_level
     log_level = log_level_in
     global log_file
@@ -614,7 +621,7 @@ def run_parallel_optimizations():
         taus = [0.5]
         r_experiments = [1.5]
         hosp_optim = False
-        region = 'hcd'
+        region = 'erva'
         num_age_groups = 9
     else:
         time_horizon = args.part_time

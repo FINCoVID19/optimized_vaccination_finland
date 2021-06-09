@@ -238,16 +238,17 @@ def forward_integration(u_con, c1, beta, c_gh, T, pop_hat, age_er,
     return S_g, E_g, H_wg, H_cg, H_rg, I_g, D_g, u, hospitalized_incidence, infections_incidence
 
 
-def read_initial_values(age_er, init_vacc, t0):
+def read_initial_values(age_er, region, init_vacc, t0):
     num_regions, num_age_groups = age_er.shape
     N_p = num_regions
     N_g = num_age_groups
 
     dir_path = os.path.dirname(os.path.realpath(__file__))
     if init_vacc:
-        csv_name = 'epidemic_finland_%d.csv' % (num_age_groups, )
+        csv_name = 'epidemic_finland_%s_%s.csv' % (num_age_groups, region)
     else:
-        csv_name = 'epidemic_finland_%d_no_vacc.csv' % (num_age_groups, )
+        csv_name = 'epidemic_finland_%s_%s_no_vacc.csv' % (num_age_groups,
+                                                           region)
     csv_name = os.path.join(dir_path, 'out', csv_name)
 
     # Reading CSV
@@ -255,12 +256,12 @@ def read_initial_values(age_er, init_vacc, t0):
     # Getting only date t0
     epidemic_zero = epidemic_csv.loc[epidemic_csv['date'] == t0, :]
     # Removing Ahvenanmaa or Aland
-    epidemic_zero = epidemic_zero[~epidemic_zero['erva'].str.contains('land')]
+    epidemic_zero = epidemic_zero[epidemic_zero['region'] != 'Åland']
 
     # Getting the order the ervas have inside the dataframe
-    ervas_order = EPIDEMIC['ervas_order']
-    ervas_df = list(pd.unique(epidemic_zero['erva']))
-    ervas_pd_order = [ervas_df.index(erva) for erva in ervas_order]
+    region_order = EPIDEMIC['region_order'][region]
+    regions_in_df = list(pd.unique(epidemic_zero['region']))
+    regions_df_order = [regions_in_df.index(reg) for reg in region_order]
 
     select_columns = ['susceptible',
                       'infected',
@@ -278,7 +279,7 @@ def read_initial_values(age_er, init_vacc, t0):
     epidemic_npy = epidemic_npy.reshape(N_p, N_g, len(select_columns))
 
     # Rearranging the order of the matrix with correct order
-    epidemic_npy = epidemic_npy[ervas_pd_order, :]
+    epidemic_npy = epidemic_npy[regions_df_order, :]
 
     # Adding 1 dimension to age_er to do array division
     age_er_div = age_er[:, :, np.newaxis]
