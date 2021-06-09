@@ -415,7 +415,7 @@ def optimize(epidemic_npy_complete, max_execution_hours):
 
 
 def full_optimize(r, tau, time_horizon, init_time, max_execution_hours,
-                  total_time, num_age_groups, num_regions, hosp_optim_in):
+                  total_time, num_age_groups, region, hosp_optim_in):
     logger = create_logger(log_file, log_level)
 
     global t0
@@ -558,7 +558,8 @@ def full_optimize(r, tau, time_horizon, init_time, max_execution_hours,
 
 
 def run_optimize(r, tau, time_horizon, init_time, total_time, log_level_in,
-                 hosp_optim, max_execution_hours, log_file_in):
+                 hosp_optim, max_execution_hours, log_file_in, region,
+                 num_age_groups):
     multiprocessing.current_process().name = 'WorkerFor-R_%s-Tau_%s' % (r, tau)
     global log_level
     log_level = log_level_in
@@ -578,8 +579,8 @@ def run_optimize(r, tau, time_horizon, init_time, total_time, log_level_in,
                                  init_time=init_time,
                                  total_time=total_time,
                                  hosp_optim_in=hosp_optim,
-                                 num_age_groups=9,
-                                 num_regions=5,
+                                 num_age_groups=num_age_groups,
+                                 region=region,
                                  max_execution_hours=max_execution_hours)
 
         elapsed_time = time.time() - start_time
@@ -613,6 +614,8 @@ def run_parallel_optimizations():
         taus = [0.5]
         r_experiments = [1.5]
         hosp_optim = False
+        region = 'erva'
+        num_age_groups = 9
     else:
         time_horizon = args.part_time
         init_time = args.t0
@@ -620,6 +623,8 @@ def run_parallel_optimizations():
         taus = args.taus
         r_experiments = args.r_experiments
         hosp_optim = args.hosp_optim
+        region = args.region
+        num_age_groups = args.num_age_groups
 
     all_experiments = []
     for tau in taus:
@@ -631,6 +636,8 @@ def run_parallel_optimizations():
                  'T0: %(t0)s\n'
                  'T: %(T)s\n'
                  'part_time: %(part_time)s\n'
+                 'Region: %(region)s\n'
+                 'Number of age groups: %(num_age_groups)s\n'
                  'Hospitalization optimized: %(hosp_optim)s\n'
                  'all_experiments: %(all_experiments)s\n'
                  'Log level: %(log_level)s\n'
@@ -640,6 +647,8 @@ def run_parallel_optimizations():
                     't0': init_time,
                     'T': total_time,
                     'part_time': time_horizon,
+                    'num_age_groups': num_age_groups,
+                    'region': region,
                     'hosp_optim': hosp_optim,
                     'all_experiments': all_experiments,
                     'log_level': args.log_level,
@@ -660,6 +669,8 @@ def run_parallel_optimizations():
                                 'r': r,
                                 'tau': tau,
                                 'time_horizon': time_horizon,
+                                'region': region,
+                                'num_age_groups': num_age_groups,
                                 'init_time': init_time,
                                 'total_time': total_time,
                                 'log_level_in': log_level,

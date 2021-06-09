@@ -76,6 +76,16 @@ def parse_args(args=sys.argv[1:]):
                         help=('The total time horizon is going to be divided'
                               ' in  batches part_time days.'))
 
+    parser.add_argument('--num_age_groups', type=int,
+                        default=9,
+                        choices=[8, 9],
+                        help="Get the optimized vaccination for 'num_age_groups'.")
+
+    parser.add_argument("--region", type=str,
+                        default='erva',
+                        choices=["erva", "hcd"],
+                        help="Get the optimized vaccination for this 'region'.")
+
     parser.add_argument('--hosp_optim', action='store_true',
                         help='If set the number of hospitalizations is optimized.')
 
