@@ -2,7 +2,7 @@ from forward_integration import (
     forward_integration, get_model_parameters, read_initial_values
 )
 import numpy as np
-from multiprocessing import Pool
+import multiprocessing
 import os
 import time
 import datetime
@@ -103,7 +103,7 @@ def get_experiments_results(num_age_groups, region, e, taus,
     num_cpus = os.cpu_count()
     start_time = time.time()
     print('Running %s experiments with %s CPUS.' % (num_experiments, num_cpus))
-    with Pool(processes=num_cpus) as pool:
+    with multiprocessing.get_context('spawn').Pool(processes=num_cpus) as pool:
         # Calling the function to execute forward simulation in asynchronous way
         async_res = []
         for r, r_level in experiments.items():
