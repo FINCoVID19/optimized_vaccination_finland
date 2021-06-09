@@ -1,0 +1,419 @@
+region;Age;Total;Males;Females
+All;Total;5533793;2733808;2799985
+All;0 - 4;246992;126209;120783
+All;5 - 9;300950;153934;147016
+All;10 - 14;312919;160031;152888
+All;15 - 19;298232;152522;145710
+All;20 - 24;308410;159178;149232
+All;25 - 29;352990;181808;171182
+All;30 - 34;355067;183434;171633
+All;35 - 39;363694;187719;175975
+All;40 - 44;348531;178936;169595
+All;45 - 49;317890;162358;155532
+All;50 - 54;347146;174856;172290
+All;55 - 59;367783;183465;184318
+All;60 - 64;357251;175134;182117
+All;65 - 69;353975;169845;184130
+All;70 - 74;354128;165833;188295
+All;75 - 79;232426;103742;128684
+All;80 - 84;160459;65005;95454
+All;85 -;154950;49799;105151
+Southwest Finland Hospital District;Total;484188;237282;246906
+Southwest Finland Hospital District;0 - 4;20403;10486;9917
+Southwest Finland Hospital District;5 - 9;24616;12645;11971
+Southwest Finland Hospital District;10 - 14;25513;12958;12555
+Southwest Finland Hospital District;15 - 19;24833;12768;12065
+Southwest Finland Hospital District;20 - 24;29807;14732;15075
+Southwest Finland Hospital District;25 - 29;31730;16358;15372
+Southwest Finland Hospital District;30 - 34;30162;15622;14540
+Southwest Finland Hospital District;35 - 39;30831;15789;15042
+Southwest Finland Hospital District;40 - 44;30346;15257;15089
+Southwest Finland Hospital District;45 - 49;27786;14243;13543
+Southwest Finland Hospital District;50 - 54;30879;15371;15508
+Southwest Finland Hospital District;55 - 59;31693;15746;15947
+Southwest Finland Hospital District;60 - 64;30462;14892;15570
+Southwest Finland Hospital District;65 - 69;31376;14764;16612
+Southwest Finland Hospital District;70 - 74;32455;15171;17284
+Southwest Finland Hospital District;75 - 79;21624;9721;11903
+Southwest Finland Hospital District;80 - 84;14721;5946;8775
+Southwest Finland Hospital District;85 -;14951;4813;10138
+Satakunta Hospital District;Total;215416;106767;108649
+Satakunta Hospital District;0 - 4;8497;4319;4178
+Satakunta Hospital District;5 - 9;10855;5518;5337
+Satakunta Hospital District;10 - 14;11589;5911;5678
+Satakunta Hospital District;15 - 19;11186;5860;5326
+Satakunta Hospital District;20 - 24;10043;5486;4557
+Satakunta Hospital District;25 - 29;11053;5878;5175
+Satakunta Hospital District;30 - 34;11591;6064;5527
+Satakunta Hospital District;35 - 39;12676;6590;6086
+Satakunta Hospital District;40 - 44;12410;6419;5991
+Satakunta Hospital District;45 - 49;11667;5907;5760
+Satakunta Hospital District;50 - 54;13901;7068;6833
+Satakunta Hospital District;55 - 59;15185;7689;7496
+Satakunta Hospital District;60 - 64;15175;7420;7755
+Satakunta Hospital District;65 - 69;16098;7973;8125
+Satakunta Hospital District;70 - 74;16743;7916;8827
+Satakunta Hospital District;75 - 79;10931;4908;6023
+Satakunta Hospital District;80 - 84;8138;3313;4825
+Satakunta Hospital District;85 -;7678;2528;5150
+Kanta-Häme Hospital District;Total;170577;84368;86209
+Kanta-Häme Hospital District;0 - 4;6747;3495;3252
+Kanta-Häme Hospital District;5 - 9;8783;4573;4210
+Kanta-Häme Hospital District;10 - 14;9920;5160;4760
+Kanta-Häme Hospital District;15 - 19;9475;4877;4598
+Kanta-Häme Hospital District;20 - 24;7759;4326;3433
+Kanta-Häme Hospital District;25 - 29;8424;4452;3972
+Kanta-Häme Hospital District;30 - 34;8882;4610;4272
+Kanta-Häme Hospital District;35 - 39;10104;5192;4912
+Kanta-Häme Hospital District;40 - 44;10446;5154;5292
+Kanta-Häme Hospital District;45 - 49;10015;5082;4933
+Kanta-Häme Hospital District;50 - 54;11498;5840;5658
+Kanta-Häme Hospital District;55 - 59;12300;6189;6111
+Kanta-Häme Hospital District;60 - 64;12160;5946;6214
+Kanta-Häme Hospital District;65 - 69;12279;5860;6419
+Kanta-Häme Hospital District;70 - 74;12573;5909;6664
+Kanta-Häme Hospital District;75 - 79;8109;3668;4441
+Kanta-Häme Hospital District;80 - 84;5641;2277;3364
+Kanta-Häme Hospital District;85 -;5462;1758;3704
+Pirkanmaa Hospital District;Total;539954;266069;273885
+Pirkanmaa Hospital District;0 - 4;23522;12043;11479
+Pirkanmaa Hospital District;5 - 9;29251;14985;14266
+Pirkanmaa Hospital District;10 - 14;30041;15273;14768
+Pirkanmaa Hospital District;15 - 19;28625;14320;14305
+Pirkanmaa Hospital District;20 - 24;33828;17280;16548
+Pirkanmaa Hospital District;25 - 29;36425;18898;17527
+Pirkanmaa Hospital District;30 - 34;35786;18357;17429
+Pirkanmaa Hospital District;35 - 39;36514;18827;17687
+Pirkanmaa Hospital District;40 - 44;34431;17714;16717
+Pirkanmaa Hospital District;45 - 49;31005;15864;15141
+Pirkanmaa Hospital District;50 - 54;32938;16636;16302
+Pirkanmaa Hospital District;55 - 59;33755;16900;16855
+Pirkanmaa Hospital District;60 - 64;32934;16212;16722
+Pirkanmaa Hospital District;65 - 69;32939;15546;17393
+Pirkanmaa Hospital District;70 - 74;34281;16007;18274
+Pirkanmaa Hospital District;75 - 79;22542;10019;12523
+Pirkanmaa Hospital District;80 - 84;15727;6354;9373
+Pirkanmaa Hospital District;85 -;15410;4834;10576
+Päijät-Häme Hospital District;Total;209475;102354;107121
+Päijät-Häme Hospital District;0 - 4;8196;4226;3970
+Päijät-Häme Hospital District;5 - 9;10330;5313;5017
+Päijät-Häme Hospital District;10 - 14;11230;5704;5526
+Päijät-Häme Hospital District;15 - 19;11161;5743;5418
+Päijät-Häme Hospital District;20 - 24;9604;4980;4624
+Päijät-Häme Hospital District;25 - 29;11147;5830;5317
+Päijät-Häme Hospital District;30 - 34;11137;5778;5359
+Päijät-Häme Hospital District;35 - 39;12151;6175;5976
+Päijät-Häme Hospital District;40 - 44;12309;6269;6040
+Päijät-Häme Hospital District;45 - 49;11976;6134;5842
+Päijät-Häme Hospital District;50 - 54;13680;6795;6885
+Päijät-Häme Hospital District;55 - 59;14748;7460;7288
+Päijät-Häme Hospital District;60 - 64;14650;7069;7581
+Päijät-Häme Hospital District;65 - 69;15629;7332;8297
+Päijät-Häme Hospital District;70 - 74;16611;7749;8862
+Päijät-Häme Hospital District;75 - 79;10792;4776;6016
+Päijät-Häme Hospital District;80 - 84;7395;2956;4439
+Päijät-Häme Hospital District;85 -;6729;2065;4664
+Kymenlaakso Hospital District;Total;162812;80520;82292
+Kymenlaakso Hospital District;0 - 4;5622;2811;2811
+Kymenlaakso Hospital District;5 - 9;7448;3728;3720
+Kymenlaakso Hospital District;10 - 14;8178;4174;4004
+Kymenlaakso Hospital District;15 - 19;8296;4398;3898
+Kymenlaakso Hospital District;20 - 24;7027;3944;3083
+Kymenlaakso Hospital District;25 - 29;7909;4285;3624
+Kymenlaakso Hospital District;30 - 34;8268;4330;3938
+Kymenlaakso Hospital District;35 - 39;9065;4795;4270
+Kymenlaakso Hospital District;40 - 44;9490;4879;4611
+Kymenlaakso Hospital District;45 - 49;9291;4731;4560
+Kymenlaakso Hospital District;50 - 54;10943;5506;5437
+Kymenlaakso Hospital District;55 - 59;12186;6182;6004
+Kymenlaakso Hospital District;60 - 64;12473;6163;6310
+Kymenlaakso Hospital District;65 - 69;12638;6114;6524
+Kymenlaakso Hospital District;70 - 74;13155;6228;6927
+Kymenlaakso Hospital District;75 - 79;8747;3926;4821
+Kymenlaakso Hospital District;80 - 84;6057;2480;3577
+Kymenlaakso Hospital District;85 -;6019;1846;4173
+South Karelia Hospital District;Total;126921;63187;63734
+South Karelia Hospital District;0 - 4;4369;2284;2085
+South Karelia Hospital District;5 - 9;5845;2951;2894
+South Karelia Hospital District;10 - 14;6326;3186;3140
+South Karelia Hospital District;15 - 19;6296;3270;3026
+South Karelia Hospital District;20 - 24;7260;4179;3081
+South Karelia Hospital District;25 - 29;6537;3676;2861
+South Karelia Hospital District;30 - 34;6525;3456;3069
+South Karelia Hospital District;35 - 39;7099;3711;3388
+South Karelia Hospital District;40 - 44;7198;3758;3440
+South Karelia Hospital District;45 - 49;7148;3618;3530
+South Karelia Hospital District;50 - 54;8207;4182;4025
+South Karelia Hospital District;55 - 59;9109;4559;4550
+South Karelia Hospital District;60 - 64;9513;4767;4746
+South Karelia Hospital District;65 - 69;9763;4774;4989
+South Karelia Hospital District;70 - 74;9696;4619;5077
+South Karelia Hospital District;75 - 79;6506;2862;3644
+South Karelia Hospital District;80 - 84;4782;1917;2865
+South Karelia Hospital District;85 -;4742;1418;3324
+South Savo Hospital District;Total;97514;48253;49261
+South Savo Hospital District;0 - 4;3411;1714;1697
+South Savo Hospital District;5 - 9;4369;2241;2128
+South Savo Hospital District;10 - 14;4701;2432;2269
+South Savo Hospital District;15 - 19;4743;2542;2201
+South Savo Hospital District;20 - 24;4249;2408;1841
+South Savo Hospital District;25 - 29;4434;2370;2064
+South Savo Hospital District;30 - 34;4791;2529;2262
+South Savo Hospital District;35 - 39;5023;2625;2398
+South Savo Hospital District;40 - 44;4965;2474;2491
+South Savo Hospital District;45 - 49;4987;2472;2515
+South Savo Hospital District;50 - 54;6171;3116;3055
+South Savo Hospital District;55 - 59;7401;3721;3680
+South Savo Hospital District;60 - 64;8132;4100;4032
+South Savo Hospital District;65 - 69;8438;4253;4185
+South Savo Hospital District;70 - 74;8281;3922;4359
+South Savo Hospital District;75 - 79;5506;2506;3000
+South Savo Hospital District;80 - 84;4029;1592;2437
+South Savo Hospital District;85 -;3883;1236;2647
+Itä-Savo Hospital District;Total;39877;19687;20190
+Itä-Savo Hospital District;0 - 4;1155;601;554
+Itä-Savo Hospital District;5 - 9;1583;807;776
+Itä-Savo Hospital District;10 - 14;1804;899;905
+Itä-Savo Hospital District;15 - 19;2044;1038;1006
+Itä-Savo Hospital District;20 - 24;1525;836;689
+Itä-Savo Hospital District;25 - 29;1543;847;696
+Itä-Savo Hospital District;30 - 34;1708;922;786
+Itä-Savo Hospital District;35 - 39;1889;995;894
+Itä-Savo Hospital District;40 - 44;1878;926;952
+Itä-Savo Hospital District;45 - 49;1989;997;992
+Itä-Savo Hospital District;50 - 54;2631;1312;1319
+Itä-Savo Hospital District;55 - 59;3173;1599;1574
+Itä-Savo Hospital District;60 - 64;3536;1812;1724
+Itä-Savo Hospital District;65 - 69;3697;1853;1844
+Itä-Savo Hospital District;70 - 74;3659;1753;1906
+Itä-Savo Hospital District;75 - 79;2474;1155;1319
+Itä-Savo Hospital District;80 - 84;1780;723;1057
+Itä-Savo Hospital District;85 -;1809;612;1197
+North Karelia Hospital District;Total;163537;81431;82106
+North Karelia Hospital District;0 - 4;6154;3137;3017
+North Karelia Hospital District;5 - 9;7995;3977;4018
+North Karelia Hospital District;10 - 14;8148;4134;4014
+North Karelia Hospital District;15 - 19;8321;4247;4074
+North Karelia Hospital District;20 - 24;9635;4787;4848
+North Karelia Hospital District;25 - 29;9478;5087;4391
+North Karelia Hospital District;30 - 34;9075;4811;4264
+North Karelia Hospital District;35 - 39;9335;4924;4411
+North Karelia Hospital District;40 - 44;8622;4472;4150
+North Karelia Hospital District;45 - 49;8079;4053;4026
+North Karelia Hospital District;50 - 54;9373;4732;4641
+North Karelia Hospital District;55 - 59;11564;5790;5774
+North Karelia Hospital District;60 - 64;13165;6637;6528
+North Karelia Hospital District;65 - 69;13300;6784;6516
+North Karelia Hospital District;70 - 74;12217;6071;6146
+North Karelia Hospital District;75 - 79;8031;3691;4340
+North Karelia Hospital District;80 - 84;5638;2343;3295
+North Karelia Hospital District;85 -;5407;1754;3653
+North Savo Hospital District;Total;243576;120417;123159
+North Savo Hospital District;0 - 4;9821;4932;4889
+North Savo Hospital District;5 - 9;12390;6283;6107
+North Savo Hospital District;10 - 14;12747;6584;6163
+North Savo Hospital District;15 - 19;12951;6604;6347
+North Savo Hospital District;20 - 24;13387;6795;6592
+North Savo Hospital District;25 - 29;14406;7441;6965
+North Savo Hospital District;30 - 34;13902;7306;6596
+North Savo Hospital District;35 - 39;14557;7444;7113
+North Savo Hospital District;40 - 44;13449;6964;6485
+North Savo Hospital District;45 - 49;12431;6332;6099
+North Savo Hospital District;50 - 54;15121;7603;7518
+North Savo Hospital District;55 - 59;17352;8767;8585
+North Savo Hospital District;60 - 64;18172;8975;9197
+North Savo Hospital District;65 - 69;18428;9149;9279
+North Savo Hospital District;70 - 74;17385;8407;8978
+North Savo Hospital District;75 - 79;11018;4939;6079
+North Savo Hospital District;80 - 84;8068;3296;4772
+North Savo Hospital District;85 -;7991;2596;5395
+Central Finland Hospital District;Total;252730;125768;126962
+Central Finland Hospital District;0 - 4;10977;5673;5304
+Central Finland Hospital District;5 - 9;14055;7095;6960
+Central Finland Hospital District;10 - 14;14819;7632;7187
+Central Finland Hospital District;15 - 19;13935;7021;6914
+Central Finland Hospital District;20 - 24;17012;8623;8389
+Central Finland Hospital District;25 - 29;16797;9006;7791
+Central Finland Hospital District;30 - 34;15304;8040;7264
+Central Finland Hospital District;35 - 39;15806;8189;7617
+Central Finland Hospital District;40 - 44;15162;7794;7368
+Central Finland Hospital District;45 - 49;13740;7152;6588
+Central Finland Hospital District;50 - 54;14376;7293;7083
+Central Finland Hospital District;55 - 59;16225;8126;8099
+Central Finland Hospital District;60 - 64;16444;8123;8321
+Central Finland Hospital District;65 - 69;16411;8013;8398
+Central Finland Hospital District;70 - 74;16560;7881;8679
+Central Finland Hospital District;75 - 79;10460;4718;5742
+Central Finland Hospital District;80 - 84;7570;3096;4474
+Central Finland Hospital District;85 -;7077;2293;4784
+South Ostrobothnia Hospital District;Total;192150;95988;96162
+South Ostrobothnia Hospital District;0 - 4;8687;4395;4292
+South Ostrobothnia Hospital District;5 - 9;11081;5676;5405
+South Ostrobothnia Hospital District;10 - 14;11517;5891;5626
+South Ostrobothnia Hospital District;15 - 19;11286;5945;5341
+South Ostrobothnia Hospital District;20 - 24;8970;4929;4041
+South Ostrobothnia Hospital District;25 - 29;9869;5198;4671
+South Ostrobothnia Hospital District;30 - 34;10160;5271;4889
+South Ostrobothnia Hospital District;35 - 39;11363;5862;5501
+South Ostrobothnia Hospital District;40 - 44;10813;5611;5202
+South Ostrobothnia Hospital District;45 - 49;10241;5259;4982
+South Ostrobothnia Hospital District;50 - 54;11686;6010;5676
+South Ostrobothnia Hospital District;55 - 59;12980;6496;6484
+South Ostrobothnia Hospital District;60 - 64;13494;6703;6791
+South Ostrobothnia Hospital District;65 - 69;14090;7150;6940
+South Ostrobothnia Hospital District;70 - 74;13881;6703;7178
+South Ostrobothnia Hospital District;75 - 79;8659;3969;4690
+South Ostrobothnia Hospital District;80 - 84;6524;2690;3834
+South Ostrobothnia Hospital District;85 -;6849;2230;4619
+Vaasa Hospital District;Total;169400;85632;83768
+Vaasa Hospital District;0 - 4;8533;4344;4189
+Vaasa Hospital District;5 - 9;9908;5100;4808
+Vaasa Hospital District;10 - 14;10326;5323;5003
+Vaasa Hospital District;15 - 19;9554;4944;4610
+Vaasa Hospital District;20 - 24;10529;5672;4857
+Vaasa Hospital District;25 - 29;10410;5580;4830
+Vaasa Hospital District;30 - 34;10366;5470;4896
+Vaasa Hospital District;35 - 39;10467;5500;4967
+Vaasa Hospital District;40 - 44;10316;5445;4871
+Vaasa Hospital District;45 - 49;9454;4863;4591
+Vaasa Hospital District;50 - 54;10184;5306;4878
+Vaasa Hospital District;55 - 59;10032;5017;5015
+Vaasa Hospital District;60 - 64;9859;4889;4970
+Vaasa Hospital District;65 - 69;10413;5146;5267
+Vaasa Hospital District;70 - 74;10657;5209;5448
+Vaasa Hospital District;75 - 79;7507;3556;3951
+Vaasa Hospital District;80 - 84;5194;2266;2928
+Vaasa Hospital District;85 -;5691;2002;3689
+Central Ostrobothnia Hospital District;Total;77114;38528;38586
+Central Ostrobothnia Hospital District;0 - 4;4069;2055;2014
+Central Ostrobothnia Hospital District;5 - 9;5038;2564;2474
+Central Ostrobothnia Hospital District;10 - 14;5116;2608;2508
+Central Ostrobothnia Hospital District;15 - 19;4808;2458;2350
+Central Ostrobothnia Hospital District;20 - 24;3642;2001;1641
+Central Ostrobothnia Hospital District;25 - 29;3997;2078;1919
+Central Ostrobothnia Hospital District;30 - 34;4434;2309;2125
+Central Ostrobothnia Hospital District;35 - 39;4591;2335;2256
+Central Ostrobothnia Hospital District;40 - 44;4488;2323;2165
+Central Ostrobothnia Hospital District;45 - 49;4107;2113;1994
+Central Ostrobothnia Hospital District;50 - 54;4533;2377;2156
+Central Ostrobothnia Hospital District;55 - 59;4826;2409;2417
+Central Ostrobothnia Hospital District;60 - 64;4856;2401;2455
+Central Ostrobothnia Hospital District;65 - 69;5141;2508;2633
+Central Ostrobothnia Hospital District;70 - 74;5318;2593;2725
+Central Ostrobothnia Hospital District;75 - 79;3403;1594;1809
+Central Ostrobothnia Hospital District;80 - 84;2281;974;1307
+Central Ostrobothnia Hospital District;85 -;2466;828;1638
+North Ostrobothnia Hospital District;Total;411120;207490;203630
+North Ostrobothnia Hospital District;0 - 4;21475;10882;10593
+North Ostrobothnia Hospital District;5 - 9;27297;13951;13346
+North Ostrobothnia Hospital District;10 - 14;28788;14693;14095
+North Ostrobothnia Hospital District;15 - 19;26678;13709;12969
+North Ostrobothnia Hospital District;20 - 24;25175;13536;11639
+North Ostrobothnia Hospital District;25 - 29;26248;13962;12286
+North Ostrobothnia Hospital District;30 - 34;24890;13069;11821
+North Ostrobothnia Hospital District;35 - 39;26423;13867;12556
+North Ostrobothnia Hospital District;40 - 44;25593;13263;12330
+North Ostrobothnia Hospital District;45 - 49;22662;11819;10843
+North Ostrobothnia Hospital District;50 - 54;23352;12086;11266
+North Ostrobothnia Hospital District;55 - 59;24854;12555;12299
+North Ostrobothnia Hospital District;60 - 64;25033;12402;12631
+North Ostrobothnia Hospital District;65 - 69;24839;12291;12548
+North Ostrobothnia Hospital District;70 - 74;22757;10949;11808
+North Ostrobothnia Hospital District;75 - 79;14598;6682;7916
+North Ostrobothnia Hospital District;80 - 84;10359;4350;6009
+North Ostrobothnia Hospital District;85 -;10099;3424;6675
+Kainuu Hospital District;Total;71664;36237;35427
+Kainuu Hospital District;0 - 4;2612;1300;1312
+Kainuu Hospital District;5 - 9;3432;1752;1680
+Kainuu Hospital District;10 - 14;3777;1957;1820
+Kainuu Hospital District;15 - 19;3619;1923;1696
+Kainuu Hospital District;20 - 24;3280;1948;1332
+Kainuu Hospital District;25 - 29;3411;1862;1549
+Kainuu Hospital District;30 - 34;3540;1884;1656
+Kainuu Hospital District;35 - 39;3929;2107;1822
+Kainuu Hospital District;40 - 44;3704;1947;1757
+Kainuu Hospital District;45 - 49;3444;1737;1707
+Kainuu Hospital District;50 - 54;4333;2213;2120
+Kainuu Hospital District;55 - 59;5569;2847;2722
+Kainuu Hospital District;60 - 64;6070;3076;2994
+Kainuu Hospital District;65 - 69;6333;3248;3085
+Kainuu Hospital District;70 - 74;5571;2727;2844
+Kainuu Hospital District;75 - 79;3637;1689;1948
+Kainuu Hospital District;80 - 84;2726;1111;1615
+Kainuu Hospital District;85 -;2677;909;1768
+Länsi-Pohja Hospital District;Total;59653;30035;29618
+Länsi-Pohja Hospital District;0 - 4;2455;1253;1202
+Länsi-Pohja Hospital District;5 - 9;3183;1638;1545
+Länsi-Pohja Hospital District;10 - 14;3486;1787;1699
+Länsi-Pohja Hospital District;15 - 19;3266;1716;1550
+Länsi-Pohja Hospital District;20 - 24;2612;1457;1155
+Länsi-Pohja Hospital District;25 - 29;2820;1504;1316
+Länsi-Pohja Hospital District;30 - 34;3005;1592;1413
+Länsi-Pohja Hospital District;35 - 39;3294;1720;1574
+Länsi-Pohja Hospital District;40 - 44;3321;1735;1586
+Länsi-Pohja Hospital District;45 - 49;3130;1654;1476
+Länsi-Pohja Hospital District;50 - 54;3596;1833;1763
+Länsi-Pohja Hospital District;55 - 59;4317;2219;2098
+Länsi-Pohja Hospital District;60 - 64;4697;2346;2351
+Länsi-Pohja Hospital District;65 - 69;4943;2474;2469
+Länsi-Pohja Hospital District;70 - 74;4608;2277;2331
+Länsi-Pohja Hospital District;75 - 79;2754;1272;1482
+Länsi-Pohja Hospital District;80 - 84;2107;858;1249
+Länsi-Pohja Hospital District;85 -;2059;700;1359
+Lappi Hospital District;Total;117012;58402;58610
+Lappi Hospital District;0 - 4;4765;2399;2366
+Lappi Hospital District;5 - 9;5982;3023;2959
+Lappi Hospital District;10 - 14;6223;3225;2998
+Lappi Hospital District;15 - 19;5710;2959;2751
+Lappi Hospital District;20 - 24;6274;3074;3200
+Lappi Hospital District;25 - 29;7052;3537;3515
+Lappi Hospital District;30 - 34;7097;3572;3525
+Lappi Hospital District;35 - 39;7245;3791;3454
+Lappi Hospital District;40 - 44;6289;3280;3009
+Lappi Hospital District;45 - 49;5610;2838;2772
+Lappi Hospital District;50 - 54;6931;3478;3453
+Lappi Hospital District;55 - 59;8914;4516;4398
+Lappi Hospital District;60 - 64;9482;4848;4634
+Lappi Hospital District;65 - 69;8928;4568;4360
+Lappi Hospital District;70 - 74;8186;4110;4076
+Lappi Hospital District;75 - 79;4837;2283;2554
+Lappi Hospital District;80 - 84;3915;1636;2279
+Lappi Hospital District;85 -;3572;1265;2307
+Helsinki and Uusimaa Hospital District;Total;1698974;830404;868570
+Helsinki and Uusimaa Hospital District;0 - 4;84030;43101;40929
+Helsinki and Uusimaa Hospital District;5 - 9;95773;49229;46544
+Helsinki and Uusimaa Hospital District;10 - 14;96924;49602;47322
+Helsinki and Uusimaa Hospital District;15 - 19;89902;45380;44522
+Helsinki and Uusimaa Hospital District;20 - 24;95528;47461;48067
+Helsinki and Uusimaa Hospital District;25 - 29;127662;63125;64537
+Helsinki and Uusimaa Hospital District;30 - 34;132531;67454;65077
+Helsinki and Uusimaa Hospital District;35 - 39;129397;66309;63088
+Helsinki and Uusimaa Hospital District;40 - 44;121410;62308;59102
+Helsinki and Uusimaa Hospital District;45 - 49;107166;54479;52687
+Helsinki and Uusimaa Hospital District;50 - 54;110716;55072;55644
+Helsinki and Uusimaa Hospital District;55 - 59;109539;53662;55877
+Helsinki and Uusimaa Hospital District;60 - 64;95024;45462;49562
+Helsinki and Uusimaa Hospital District;65 - 69;86316;39101;47215
+Helsinki and Uusimaa Hospital District;70 - 74;87656;38720;48936
+Helsinki and Uusimaa Hospital District;75 - 79;58926;25114;33812
+Helsinki and Uusimaa Hospital District;80 - 84;36952;14453;22499
+Helsinki and Uusimaa Hospital District;85 -;33522;10372;23150
+Åland;Total;30129;14989;15140
+Åland;0 - 4;1492;759;733
+Åland;5 - 9;1736;885;851
+Åland;10 - 14;1746;898;848
+Åland;15 - 19;1543;800;743
+Åland;20 - 24;1264;724;540
+Åland;25 - 29;1638;834;804
+Åland;30 - 34;1913;988;925
+Åland;35 - 39;1935;972;963
+Åland;40 - 44;1891;944;947
+Åland;45 - 49;1962;1011;951
+Åland;50 - 54;2097;1027;1070
+Åland;55 - 59;2061;1016;1045
+Åland;60 - 64;1920;891;1029
+Åland;65 - 69;1976;944;1032
+Åland;70 - 74;1878;912;966
+Åland;75 - 79;1365;694;671
+Åland;80 - 84;855;374;481
+Åland;85 -;857;316;541

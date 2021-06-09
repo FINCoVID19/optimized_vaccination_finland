@@ -34,6 +34,52 @@ MAPPINGS = {
         "All areas": "All",
         "Other areas": "Other",
     },
+    "hcd_code_hcd_name": {
+        0: "Åland",
+        3: "Southwest Finland Hospital District",
+        4: "Satakunta Hospital District",
+        5: "Kanta-Häme Hospital District",
+        6: "Pirkanmaa Hospital District",
+        7: "Päijät-Häme Hospital District",
+        8: "Kymenlaakso Hospital District",
+        9: "South Karelia Hospital District",
+        10: "South Savo Hospital District",
+        11: "Itä-Savo Hospital District",
+        12: "North Karelia Hospital District",
+        13: "North Savo Hospital District",
+        14: "Central Finland Hospital District",
+        15: "South Ostrobothnia Hospital District",
+        16: "Vaasa Hospital District",
+        17: "Central Ostrobothnia Hospital District",
+        18: "North Ostrobothnia Hospital District",
+        19: "Kainuu Hospital District",
+        20: "Länsi-Pohja Hospital District",
+        21: "Lappi Hospital District",
+        25: "Helsinki and Uusimaa Hospital District"
+    },
+    "hcd_name_hcd_code": {
+        "Åland": 0,
+        "Southwest Finland Hospital District": 3,
+        "Satakunta Hospital District": 4,
+        "Kanta-Häme Hospital District": 5,
+        "Pirkanmaa Hospital District": 6,
+        "Päijät-Häme Hospital District": 7,
+        "Kymenlaakso Hospital District": 8,
+        "South Karelia Hospital District": 9,
+        "South Savo Hospital District": 10,
+        "Itä-Savo Hospital District": 11,
+        "North Karelia Hospital District": 12,
+        "North Savo Hospital District": 13,
+        "Central Finland Hospital District": 14,
+        "South Ostrobothnia Hospital District": 15,
+        "Vaasa Hospital District": 16,
+        "Central Ostrobothnia Hospital District": 17,
+        "North Ostrobothnia Hospital District": 18,
+        "Kainuu Hospital District": 19,
+        "Länsi-Pohja Hospital District": 20,
+        "Lappi Hospital District": 21,
+        "Helsinki and Uusimaa Hospital District": 25
+    },
     "age_groups": {
         8: {
             "names": ['0-9', '10-19', '20-29', '30-39', '40-49', '50-59', '60-69', '70+'],
@@ -151,7 +197,7 @@ EXPERIMENTS = {
     'r_effs': [0.75, 1.0, 1.25, 1.5],
     'init_vacc': True,
     'taus': [0.0, 0.5, 1.0],
-    'num_ervas': 5,
+    'region': 'erva',
     'num_age_groups': 9,
     'strategies': [
         ([1, 0, 0], 'Pop'),
@@ -169,18 +215,6 @@ EXPERIMENTS = {
 }
 
 EPIDEMIC = {
-    'proportion_deaths_age': {
-        9: np.array([0.0006, 0.0002, 0.0012, 0.0026, 0.0064, 0.0210, 0.0575, 0.2092, 0.7013]),
-        8: np.array([0.0006, 0.0002, 0.0012, 0.0026, 0.0064, 0.0210, 0.0575, 0.9105])
-    },
-    'proportion_ward_age': {
-        9: np.array([0.0058, 0.0107, 0.0467, 0.0605, 0.0911, 0.1450, 0.1547, 0.2008, 0.2847]),
-        8: np.array([0.0058, 0.0107, 0.0467, 0.0605, 0.0911, 0.1450, 0.1547, 0.4855])
-    },
-    'proportion_icu_age': {
-        9: np.array([0.0038, 0.0069, 0.0301, 0.0390, 0.0978, 0.2231, 0.2891, 0.2448, 0.0655]),
-        8: np.array([0.0038, 0.0069, 0.0301, 0.0390, 0.0978, 0.2231, 0.2891, 0.3103])
-    },
     'unreported_exponent': 2.46,
     'T_E': 1./3.,
     'T_V': 1./10.,
@@ -192,7 +226,19 @@ EPIDEMIC = {
     'T_hr': 1.,
     'alpha': 0.9,
     'e': 0.7,
-    'ervas_order': ['HYKS', 'TYKS', 'TAYS', 'KYS', 'OYS'],
+    'delay_check_vacc': 14,
+    'proportion_deaths_age': {
+        8: np.array([0.0006, 0.0002, 0.0012, 0.0026, 0.0064, 0.0210, 0.0575, 0.9105]),
+        9: np.array([0.0006, 0.0002, 0.0012, 0.0026, 0.0064, 0.0210, 0.0575, 0.2092, 0.7013])
+    },
+    'proportion_ward_age': {
+        8: np.array([0.0058, 0.0107, 0.0467, 0.0605, 0.0911, 0.1450, 0.1547, 0.4855]),
+        9: np.array([0.0058, 0.0107, 0.0467, 0.0605, 0.0911, 0.1450, 0.1547, 0.2008, 0.2847])
+    },
+    'proportion_icu_age': {
+        8: np.array([0.0038, 0.0069, 0.0301, 0.0390, 0.0978, 0.2231, 0.2891, 0.3103]),
+        9: np.array([0.0038, 0.0069, 0.0301, 0.0390, 0.0978, 0.2231, 0.2891, 0.2448, 0.0655])
+    },
     'mu_q': {
         8: np.array([0, 0, 0, 0, 0, 0, 0, 0.1]),
         9: np.array([0, 0, 0, 0, 0, 0, 0, 0.08, 0.2])
@@ -213,7 +259,6 @@ EPIDEMIC = {
         8: np.array([0, 0, 0, 0, 0, 0.01, 0.03, 0.07]),
         9: np.array([0, 0, 0, 0, 0, 0.01, 0.03, 0.05, 0.01])
     },
-    'delay_check_vacc': 14,
     'contact_matrix': {
         8: np.array(([[1.30, 0.31, 0.23, 1.07, 0.51, 0.16, 0.14, 0.09],
                       [0.28, 1.39, 0.21, 0.16, 0.87, 0.44, 0.05, 0.04],
@@ -233,11 +278,29 @@ EPIDEMIC = {
                       [0.22, 0.21, 0.32, 0.36, 0.58, 0.55, 1.01, 1.09, 0.60],
                       [0.22, 0.21, 0.32, 0.36, 0.58, 0.55, 1.01, 1.09, 0.60]]))
     },
-    'mobility_matrix': {
-        5: np.array([[1389016, 7688, 16710, 7789, 1774],
-                     [11316, 518173, 14139, 562, 2870],
-                     [22928, 12404, 511506, 4360, 1675],
-                     [8990, 365, 4557, 459867, 3286],
-                     [1798, 2417, 1592, 3360, 407636]])
+    'region_order': {
+        'erva': ['HYKS', 'TYKS', 'TAYS', 'KYS', 'OYS'],
+        'hcd': [
+            "Southwest Finland Hospital District",
+            "Satakunta Hospital District",
+            "Kanta-Häme Hospital District",
+            "Pirkanmaa Hospital District",
+            "Päijät-Häme Hospital District",
+            "Kymenlaakso Hospital District",
+            "South Karelia Hospital District",
+            "South Savo Hospital District",
+            "Itä-Savo Hospital District",
+            "North Karelia Hospital District",
+            "North Savo Hospital District",
+            "Central Finland Hospital District",
+            "South Ostrobothnia Hospital District",
+            "Vaasa Hospital District",
+            "Central Ostrobothnia Hospital District",
+            "North Ostrobothnia Hospital District",
+            "Kainuu Hospital District",
+            "Länsi-Pohja Hospital District",
+            "Lappi Hospital District",
+            "Helsinki and Uusimaa Hospital District"
+        ]
     }
 }
