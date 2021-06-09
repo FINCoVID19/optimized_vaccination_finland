@@ -371,7 +371,7 @@ def optimize(epidemic_npy_complete, max_execution_hours):
 
         logger.info('minimize done:\n%s\nLooking for KG pairs.' % (log_out_minimize(res), ))
         u_op = np.reshape(res.x, (N_g, N_p, T))
-        bound_full, kg_pairs, D_d = bound_f(bound_full_orig, u_op)
+        bound_full, kg_pairs, D_d = bound_f(bound_full_orig.copy(), u_op)
         bounds = Bounds(bound0, bound_full)
 
         elapsed_time = time.time() - start_iter
@@ -439,15 +439,17 @@ def full_optimize(r, tau, time_horizon, init_time, max_execution_hours,
                   'N_g: %s\n'
                   'Region: %s') % (r, tau, t0, N_g, region))
     global mob_av, beta_gh, pop_hat, age_er
-    mob_av, beta_gh, pop_hat, age_er, rho, num_regions = get_model_parameters(
+    mob_av, beta_gh, pop_hat, age_er, rho = get_model_parameters(
                                                 number_age_groups=num_age_groups,
                                                 region=region,
                                                 init_vacc=True,
                                                 t0=init_time,
                                                 tau=tau
                                             )
+    num_regions, _ = age_er.shape
     global N_p
     N_p = num_regions
+    logger.info('Number of regions: %s' % (num_regions, ))
 
     global beta
     beta = r/rho

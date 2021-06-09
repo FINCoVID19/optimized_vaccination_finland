@@ -10,7 +10,7 @@ from env_var import EPIDEMIC, MAPPINGS
 def forward_integration(u_con, c1, beta, c_gh, T, pop_hat, age_er,
                         t0, ws_vacc, e, epidemic_npy, init_vacc, checks=False,
                         u_op_file=None):
-    # number of age groups and ervas
+    # number of age groups and regions
     num_regions, num_age_groups = age_er.shape
     N_p = num_regions
     N_g = num_age_groups
@@ -92,7 +92,7 @@ def forward_integration(u_con, c1, beta, c_gh, T, pop_hat, age_er,
 
     # Short method to get the normalized metric (infectious or hospitalized)
     # In the lat t-delay period
-    def get_metric_erva_weigth(metric, t, delay, use_ervas):
+    def get_metric_region_weigth(metric, t, delay, use_regions):
         tot_delay = t - delay
         if tot_delay < 0:
             tot_delay = 0
@@ -104,27 +104,29 @@ def forward_integration(u_con, c1, beta, c_gh, T, pop_hat, age_er,
 
         # Sum over all time
         metric_t = metric_t.sum(axis=2)
-        # Metric_t is a proportion of erva and age group
+        # Metric_t is a proportion of region and age group
         # Here transforming to actual number
         metric_t = metric_t*age_er.T
-        # Sum over all age groups
+        # Sum over all age groups to get only region counts
         metric_t_all_ages = metric_t.sum(axis=0)
 
-        # If all the values are close to 0 then assign 1 to all ervas
+        # If all the values are close to 0 then assign 1 to all regions
+        # All regions will have the same weight
         # This case can happen at the beginning when we have no hospitalizations
         if np.allclose(metric_t_all_ages, 0):
             metric_t_all_ages[:] = 1
 
         # Preallocate an array with 0s
-        metric_t_erva_norm = np.zeros(metric_t_all_ages.shape)
-        # Use_ervas is a boolean flag to indicate
-        # which ERVAs have not finished vaccination. Use only these to normalize
-        use_metric_ervas = metric_t_all_ages[use_ervas]
-        metric_t_erva = use_metric_ervas/np.sum(use_metric_ervas)
-        # The rest of the ervas will have a count of 0
-        metric_t_erva_norm[use_ervas] = metric_t_erva
+        metric_t_region_norm = np.zeros(metric_t_all_ages.shape)
+        # use_regions is a boolean flag to indicate
+        # which regions have not finished vaccination.
+        # Use only these in the normalization
+        use_metric_regions = metric_t_all_ages[use_regions]
+        metric_t_region = use_metric_regions/np.sum(use_metric_regions)
+        # The rest of the regions will have a count of 0 bc preallocation
+        metric_t_region_norm[use_regions] = metric_t_region
 
-        return metric_t_erva_norm, metric_t_all_ages
+        return metric_t_region_norm, metric_t_all_ages
 
     # Variable to store the spare vaccines from the last timestep
     remain_last = 0
@@ -135,27 +137,27 @@ def forward_integration(u_con, c1, beta, c_gh, T, pop_hat, age_er,
             u_con_remain = u_con + remain_last
             remain_last = 0
 
-            # Checking which ervas have still people to be vaccinated
-            use_ervas = age_group_indicators != -1
+            # Checking which regions still have people to be vaccinated
+            use_regions = age_group_indicators != -1
 
-            # Proportional population of the ERVA
-            pops_erva_prop = np.zeros(pop_region.shape)
-            # Only getting the missing ervas
-            use_pops = pop_region[use_ervas]
-            # Normalizing with the population of the missing ervas
+            # Proportional population of the region
+            pops_region_prop = np.zeros(pop_region.shape)
+            # Only getting the missing regions
+            use_pops = pop_region[use_regions]
+            # Normalizing with the population of the missing regions
             use_pops_prop = use_pops/np.sum(use_pops)
-            pops_erva_prop[use_ervas] = use_pops_prop
+            pops_region_prop[use_regions] = use_pops_prop
 
             # Get the normalized counts of infected people and hosp
-            hosp_norm, hosp = get_metric_erva_weigth(H_wg+H_cg+H_rg, j, delay_check_vacc, use_ervas)
-            infe_norm, infe = get_metric_erva_weigth(infections_incidence, j, delay_check_vacc, use_ervas)
+            hosp_norm, hosp = get_metric_region_weigth(H_wg+H_cg+H_rg, j, delay_check_vacc, use_regions)
+            infe_norm, infe = get_metric_region_weigth(infections_incidence, j, delay_check_vacc, use_regions)
             # Construct the final policy
-            policy = ws_vacc[0]*pops_erva_prop + ws_vacc[1]*infe_norm + ws_vacc[2]*hosp_norm
+            policy = ws_vacc[0]*pops_region_prop + ws_vacc[1]*infe_norm + ws_vacc[2]*hosp_norm
 
-            # Get the vaccines assigned to each erva
-            u_erva = u_con_remain*policy
+            # Get the vaccines assigned to each region
+            u_region = u_con_remain*policy
 
-        # Go over all ervas
+        # Go over all regions
         for n in range(N_p):
             # Go over all age groups starting from the last one
             for g in range(N_g-1, -1, -1):
@@ -170,19 +172,19 @@ def forward_integration(u_con, c1, beta, c_gh, T, pop_hat, age_er,
                         age_group_indicators[n] = g - 1
 
                         # If we reach here it means  that we have vaccines
-                        # that we are not going to use. Distribute to next erva
-                        if g == 0 and u_erva[n] != 0:
+                        # that we are not going to use. Distribute to next region
+                        if g == 0 and u_region[n] != 0:
                             if n+1 < N_p:
-                                u_erva[n+1] += u_erva[n]
+                                u_region[n+1] += u_region[n]
                             else:
-                                # If the next erva is the last one then to next timestep
-                                remain_last += u_erva[n]
+                                # If the next region is the last one then to next timestep
+                                remain_last += u_region[n]
 
-                    # Assign the vaccines to the current age group and erva
+                    # Assign the vaccines to the current age group and region
                     age_group_indicator = age_group_indicators[n]
                     if age_group_indicator == g:
                         # Get the total amount of vaccines
-                        u[g, n, j] += u_erva[n]/age_er[n, g]
+                        u[g, n, j] += u_region[n]/age_er[n, g]
 
                         # Check for leftovers in the current age group
                         all_aplied = S_g[g, n, j] - beta*lambda_g*S_g[g, n, j] - u[g, n, j]
@@ -195,11 +197,11 @@ def forward_integration(u_con, c1, beta, c_gh, T, pop_hat, age_er,
                             left_over_real = left_over*age_er[n, g]
                             # The next age group will only have the lefotvers
                             if g-1 >= 0:
-                                u_erva[n] = left_over_real
-                            # If we finnish with the age groups then give to the next erva
+                                u_region[n] = left_over_real
+                            # If we finnish with the age groups then give to the next region
                             elif n+1 < N_p:
-                                u_erva[n+1] += left_over_real
-                            # If it was the last erva then keep the vaccines for next timestep
+                                u_region[n+1] += left_over_real
+                            # If it was the last region then keep the vaccines for next timestep
                             else:
                                 remain_last += left_over_real
 
@@ -258,7 +260,7 @@ def read_initial_values(age_er, region, init_vacc, t0):
     # Removing Ahvenanmaa or Aland
     epidemic_zero = epidemic_zero[epidemic_zero['region'] != 'Åland']
 
-    # Getting the order the ervas have inside the dataframe
+    # Getting the order the regions have inside the dataframe
     region_order = EPIDEMIC['region_order'][region]
     regions_in_df = list(pd.unique(epidemic_zero['region']))
     regions_df_order = [regions_in_df.index(reg) for reg in region_order]
@@ -332,7 +334,7 @@ def get_model_parameters(number_age_groups, region, init_vacc, t0, tau):
     # Removing Ahvenanmaa or Aland
     epidemic_zero = epidemic_zero[epidemic_zero['region'] != 'Åland']
 
-    # Getting the order the ervas have inside the dataframe
+    # Getting the order the regions have inside the dataframe
     regions_in_df = list(pd.unique(epidemic_zero['region']))
     regions_df_ep_order = [regions_in_df.index(reg) for reg in region_order]
 
@@ -457,4 +459,4 @@ def get_model_parameters(number_age_groups, region, init_vacc, t0, tau):
     eig_vals = eigvals(next_gen_matrix)
     rho = np.abs(np.amax(eig_vals))
 
-    return mob_av, beta_gh, pop_hat, age_er, rho, num_regions
+    return mob_av, beta_gh, pop_hat, age_er, rho

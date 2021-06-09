@@ -8,11 +8,11 @@ import time
 import datetime
 
 
-def get_experiments_results(num_age_groups, num_ervas, e, taus,
+def get_experiments_results(num_age_groups, region, e, taus,
                             init_vacc, strategies, u, T, r_experiments, t0):
     experiments_params = {
-        'num_ervas': num_ervas,
         'num_age_groups': num_age_groups,
+        'region': region,
         'u': u,
         't0': t0,
         'T': T,
@@ -24,7 +24,7 @@ def get_experiments_results(num_age_groups, num_ervas, e, taus,
     }
     print(('Beginning experiments.\n'
            'Parameters:\n'
-           'Number of age ervas: {num_ervas}.\n'
+           'Regions: {region}.\n'
            'Number of age groups: {num_age_groups}.\n'
            'Number of vaccines per day: {u}.\n'
            't0: {t0}.\n'
@@ -37,17 +37,19 @@ def get_experiments_results(num_age_groups, num_ervas, e, taus,
 
     tau_params = {tau: {} for tau in taus}
     for tau in taus:
-        mob_av, beta_gh, pop_hat, age_er, rho = get_model_parameters(num_age_groups,
-                                                                     num_ervas,
-                                                                     init_vacc,
-                                                                     t0,
-                                                                     tau)
+        mob_av, beta_gh, pop_hat, age_er, rho = get_model_parameters(
+                                                    num_age_groups,
+                                                    region,
+                                                    init_vacc,
+                                                    t0,
+                                                    tau
+                                                )
         tau_params[tau]['mob_av'] = mob_av
         tau_params[tau]['beta_gh'] = beta_gh
         tau_params[tau]['pop_hat'] = pop_hat
         tau_params[tau]['rho'] = rho
 
-    epidemic_npy = read_initial_values(age_er, init_vacc, t0)
+    epidemic_npy = read_initial_values(age_er, region, init_vacc, t0)
 
     age_er_prop = age_er.T
     age_er_prop = age_er_prop[:, :, np.newaxis]
@@ -61,7 +63,7 @@ def get_experiments_results(num_age_groups, num_ervas, e, taus,
                 # ws is None mean go to optimized strategy
                 if type(ws) is not list:
                     dir_path = os.path.dirname(os.path.realpath(__file__))
-                    u_op_file = 'R_%s_tau_%s_t0_%s_T_%s_u_op.npy' % (r, tau, t0, T)
+                    u_op_file = '%s_R_%s_tau_%s_t0_%s_T_%s_u_op.npy' % (region, r, tau, t0, T)
                     u_op_file_path = os.path.join(dir_path, 'out', u_op_file)
                     if os.path.isfile(u_op_file_path):
                         exec_experiment = True
