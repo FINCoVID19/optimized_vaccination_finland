@@ -93,6 +93,10 @@ def parse_args(args=sys.argv[1:]):
                         default=24,
                         help='Maximum time in hours to run optimization.')
 
+    parser.add_argument("--results_folder", type=str,
+                        default='results_optim',
+                        help="Folder to store the results inside /out/.")
+
     parser.add_argument('--test', action='store_true',
                         help='If set just a quick execution is ran.')
 

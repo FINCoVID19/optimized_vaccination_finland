@@ -420,7 +420,8 @@ def optimize(epidemic_npy_complete, max_execution_hours):
 
 
 def full_optimize(r, tau, time_horizon, init_time, max_execution_hours,
-                  total_time, num_age_groups, region, hosp_optim_in):
+                  total_time, num_age_groups, region, hosp_optim_in,
+                  results_folder):
     logger = create_logger(log_file, log_level)
 
     global t0
@@ -475,7 +476,7 @@ def full_optimize(r, tau, time_horizon, init_time, max_execution_hours,
 
     base_name = '%s_R_%s_tau_%s_t0_%s_T_%s' % (region, r, tau, t0, total_time)
     dir_path = os.path.dirname(os.path.realpath(__file__))
-    results_path = os.path.join(dir_path, 'out', 'results_optim')
+    results_path = os.path.join(dir_path, 'out', results_folder)
     os.makedirs(results_path, exist_ok=True)
 
     json_file = "%s.json" % (base_name, )
@@ -568,7 +569,7 @@ def full_optimize(r, tau, time_horizon, init_time, max_execution_hours,
 
 def run_optimize(r, tau, time_horizon, init_time, total_time, log_level_in,
                  hosp_optim, max_execution_hours, log_file_in, region,
-                 num_age_groups):
+                 num_age_groups, results_folder):
     multiprocessing.current_process().name = 'Worker-%s-R_%s-Tau_%s' % (region, r, tau)
     global log_level
     log_level = log_level_in
@@ -590,6 +591,7 @@ def run_optimize(r, tau, time_horizon, init_time, total_time, log_level_in,
                                  hosp_optim_in=hosp_optim,
                                  num_age_groups=num_age_groups,
                                  region=region,
+                                 results_folder=results_folder,
                                  max_execution_hours=max_execution_hours)
 
         elapsed_time = time.time() - start_time
@@ -610,30 +612,13 @@ def run_optimize(r, tau, time_horizon, init_time, total_time, log_level_in,
         return None
 
 
-def run_parallel_optimizations():
-    args = parse_args()
-    log_level = getattr(logging, args.log_level, None)
-    log_file = args.log_file
+def run_parallel_optimizations(r_experiments, taus, num_age_groups, region,
+                               init_time, total_time, time_horizon, hosp_optim,
+                               results_folder, log_file, log_level_str,
+                               max_execution_hours):
+    log_level = getattr(logging, log_level_str, None)
     logger = create_logger(log_file, log_level)
     logger.info('Logger for optimized_vaccination configured.')
-    if args.test:
-        time_horizon = 10
-        init_time = '2021-04-18'
-        total_time = 25
-        taus = [0.5]
-        r_experiments = [1.5]
-        hosp_optim = False
-        region = 'erva'
-        num_age_groups = 9
-    else:
-        time_horizon = args.part_time
-        init_time = args.t0
-        total_time = args.T
-        taus = args.taus
-        r_experiments = args.r_experiments
-        hosp_optim = args.hosp_optim
-        region = args.region
-        num_age_groups = args.num_age_groups
 
     all_experiments = []
     for tau in taus:
@@ -649,6 +634,8 @@ def run_parallel_optimizations():
                  'Number of age groups: %(num_age_groups)s\n'
                  'Hospitalization optimized: %(hosp_optim)s\n'
                  'all_experiments: %(all_experiments)s\n'
+                 'Results folder: %(results_folder)s\n'
+                 'Log file: %(log_file)s\n'
                  'Log level: %(log_level)s\n'
                  'Max execution (hours): %(max_exec)s') % {
                     'rs': r_experiments,
@@ -660,8 +647,10 @@ def run_parallel_optimizations():
                     'region': region,
                     'hosp_optim': hosp_optim,
                     'all_experiments': all_experiments,
-                    'log_level': args.log_level,
-                    'max_exec': args.max_execution_hours
+                    'log_level': log_level_str,
+                    'log_file': log_file,
+                    'results_folder': results_folder,
+                    'max_exec': max_execution_hours
                 })
 
     num_cpus = os.cpu_count()
@@ -684,8 +673,9 @@ def run_parallel_optimizations():
                                 'total_time': total_time,
                                 'log_level_in': log_level,
                                 'hosp_optim': hosp_optim,
-                                'max_execution_hours': args.max_execution_hours,
-                                'log_file_in': log_file 
+                                'max_execution_hours': max_execution_hours,
+                                'log_file_in': log_file,
+                                'results_folder': results_folder
                             })
                         for r, tau in all_experiments
                     ]
@@ -702,4 +692,34 @@ def run_parallel_optimizations():
 
 
 if __name__ == "__main__":
-    run_parallel_optimizations()
+    args = parse_args()
+    if args.test:
+        run_parallel_optimizations(
+            time_horizon=10,
+            init_time='2021-04-18',
+            total_time=25,
+            taus=[0.5],
+            r_experiments=[1.5],
+            hosp_optim=False,
+            region='erva',
+            num_age_groups=9,
+            results_folder='foo',
+            log_file=args.log_file,
+            log_level_str=args.log_level,
+            max_execution_hours=args.max_execution_hours
+        )
+    else:
+        run_parallel_optimizations(
+            time_horizon=args.part_time,
+            init_time=args.t0,
+            total_time=args.T,
+            taus=args.taus,
+            r_experiments=args.r_experiments,
+            hosp_optim=args.hosp_optim,
+            region=args.region,
+            num_age_groups=args.num_age_groups,
+            results_folder=args.results_folder,
+            log_file=args.log_file,
+            log_level_str=args.log_level,
+            max_execution_hours=args.max_execution_hours
+        )
