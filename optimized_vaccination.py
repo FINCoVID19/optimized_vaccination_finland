@@ -345,6 +345,10 @@ def optimize(epidemic_npy_complete, max_execution_hours):
             up_idx = int((idx_t+1)*T)
             bound_full_orig[low_idx:up_idx] = n_max/age_er[k, g]
             idx_t += 1
+    bound_full_orig = bound_full_orig.reshape(N_g, N_p, T)
+    # Do not vaccinate two first age groups
+    bound_full_orig[:2, :, :] = 0
+    bound_full_orig = bound_full_orig.reshape(N_f*T)
 
     init_bounds = Bounds(bound0, bound_full_orig)
 
