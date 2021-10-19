@@ -65,6 +65,7 @@ def forward_integration(u_con, c1, beta, c_gh, T, pop_hat, age_er,
     Q_1g = np.zeros((N_g, N_p, N_t))
     H_rg = np.zeros((N_g, N_p, N_t))
     S_vg = np.zeros((N_g, N_p, N_t))
+    S_pg = np.zeros((N_g, N_p, N_t))
 
     # Initializing with CSV values
     S_g[:, :, 0] = epidemic_npy[:, :, 0]
@@ -209,10 +210,11 @@ def forward_integration(u_con, c1, beta, c_gh, T, pop_hat, age_er,
 
                 # Epidemic dynamics
                 S_g[g, n, j+1] = S_g[g, n, j] - beta*lambda_g*S_g[g, n, j] - u[g, n, j]
+                S_xg[g, n, j+1] = S_xg[g, n, j] - beta*lambda_g*S_xg[g, n, j]
                 S_vg[g, n, j+1] = S_vg[g, n, j] - beta*lambda_g*S_vg[g, n, j] + u[g, n, j] - T_V*S_vg[g, n, j]
-                S_xg[g, n, j+1] = S_xg[g, n, j] - beta*lambda_g*S_xg[g, n, j] + (1.-alpha*e)*T_V*S_vg[g, n, j]
-                V_g[g, n, j+1] = V_g[g, n, j] + alpha*e*T_V*S_vg[g, n, j]
-                E_g[g, n, j+1] = E_g[g, n, j] + beta*lambda_g*(S_g[g, n, j]+S_vg[g, n, j] + S_xg[g, n, j]) - T_E*E_g[g, n, j]
+                S_pg[g, n, j+1] = S_pg[g, n, j] - beta*lambda_g*S_pg[g, n, j] + (1.-e)*T_V*S_vg[g, n, j]
+                V_g[g, n, j+1] = V_g[g, n, j] + e*T_V*S_vg[g, n, j]
+                E_g[g, n, j+1] = E_g[g, n, j] + beta*lambda_g*(S_g[g, n, j] + S_vg[g, n, j] + S_xg[g, n, j] + S_pg[g, n, j]) - T_E*E_g[g, n, j]
                 I_g[g, n, j+1] = I_g[g, n, j] + T_E*E_g[g, n, j] - T_I*I_g[g, n, j]
                 Q_0g[g, n, j+1] = Q_0g[g, n, j] + (1.-p_H[g])*T_I*I_g[g, n, j] - T_q0*Q_0g[g, n, j]
                 Q_1g[g, n, j+1] = Q_1g[g, n, j] + p_H[g]*T_I*I_g[g, n, j] - T_q1*Q_1g[g, n, j]
