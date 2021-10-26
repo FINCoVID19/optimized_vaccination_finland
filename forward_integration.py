@@ -170,25 +170,30 @@ def forward_integration(u_con, c1, beta, c_gh, T, pop_hat, age_er,
                 L_g[g, n, j] = lambda_g
 
                 if u_op_file is None:
-                    # Check if we still can vaccinate someone in this age group
+                    # Enter if no one else is missing to vaccinate in age g,
+                    # region n and timestep j
                     if S_g[g, n, j] - beta*lambda_g*S_g[g, n, j] <= 0:
                         # Continue to next age group
                         age_group_indicators[n] = g - 1
 
                         # If we reach here it means  that we have vaccines
                         # that we are not going to use. Distribute to next erva
-                        if g == 0 and u_erva[n] != 0:
+                        if g <= 1 and u_erva[n] > 0:
+                            print('AAA ENTER')
                             if n+1 < N_p:
                                 u_erva[n+1] += u_erva[n]
+                                u_erva[n] = 0
                             else:
                                 # If the next erva is the last one then to next timestep
                                 remain_last += u_erva[n]
 
                     # Assign the vaccines to the current age group and erva
                     age_group_indicator = age_group_indicators[n]
-                    if age_group_indicator == g:
+                    if age_group_indicator == g and g > 1:
                         # Get the total amount of vaccines
                         u[g, n, j] += u_erva[n]/age_er[n, g]
+
+                        u_erva[n] = 0
 
                         # Check for leftovers in the current age group
                         all_aplied = S_g[g, n, j] - beta*lambda_g*S_g[g, n, j] - u[g, n, j]
@@ -208,6 +213,14 @@ def forward_integration(u_con, c1, beta, c_gh, T, pop_hat, age_er,
                             # If it was the last erva then keep the vaccines for next timestep
                             else:
                                 remain_last += left_over_real
+                    elif g <= 1:
+                        if u_erva[n] > 0:
+                            if n+1 < N_p:
+                                u_erva[n+1] += u_erva[n]
+                                u_erva[n] = 0
+                            else:
+                                # If the next erva is the last one then to next timestep
+                                remain_last += u_erva[n]
 
                 # if g == 0 or g == 1:
                 #     u[g, n, j] = 0
@@ -240,8 +253,8 @@ def forward_integration(u_con, c1, beta, c_gh, T, pop_hat, age_er,
     if checks:
         # Final check to see that we always vaccinate u_con people
         u_final = u*age_er.T[:, :, np.newaxis]
-        u_final = u_final.sum(axis=0)
-        u_final = u_final.sum(axis=0)
+        # Sum across all regions and age groups, Get vacc per time
+        u_final = u_final.sum(axis=(0, 1))
         print(u_final)
         print(np.where(~np.isclose(u_final, u_con)))
 
