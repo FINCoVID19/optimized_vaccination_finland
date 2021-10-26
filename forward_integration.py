@@ -45,11 +45,15 @@ def forward_integration(u_con, c1, beta, c_gh, T, pop_hat, age_er,
     delay_check_vacc = EPIDEMIC['delay_check_vacc']
 
     # Initialize vaccination rate
+    u = np.zeros((N_g, N_p, N_t))
     if u_op_file is None:
-        u = np.zeros((N_g, N_p, N_t))
         assert np.isclose(np.sum(ws_vacc), 0) or np.isclose(np.sum(ws_vacc), 1)
     else:
-        u = np.load(u_op_file)
+        u_load = np.load(u_op_file)
+        t_u_load = u_load.shape[-1]
+        u[:, :, :t_u_load] = u_load
+
+        assert np.all(u[:, :, :t_u_load] == u_load)
 
     # Allocating space for compartments
     S_g = np.zeros((N_g, N_p, N_t))
@@ -204,6 +208,9 @@ def forward_integration(u_con, c1, beta, c_gh, T, pop_hat, age_er,
                             # If it was the last erva then keep the vaccines for next timestep
                             else:
                                 remain_last += left_over_real
+
+                # if g == 0 or g == 1:
+                #     u[g, n, j] = 0
 
                 # Ensures that we do not keep vaccinating after there are no susceptibles left
                 u[g, n, j] = min(u[g, n, j], max(0.0, S_g[g, n, j] - beta*lambda_g*S_g[g, n, j]))
