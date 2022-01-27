@@ -16,7 +16,9 @@ def forward_integration(u_con, c1, beta, c_gh, T, pop_hat, age_er,
     N_p = num_ervas
     N_g = num_age_groups
     N_t = T
-
+    omega = EPIDEMIC['omega']
+    pi = EPIDEMIC['pi']
+    
     # Time periods for epidemic
     T_E = EPIDEMIC['T_E']
     T_V = EPIDEMIC['T_V']
@@ -56,6 +58,7 @@ def forward_integration(u_con, c1, beta, c_gh, T, pop_hat, age_er,
         assert np.all(u[:, :, :t_u_load] == u_load)
 
     # Allocating space for compartments
+    # Allocating space for compartments
     S_g = np.zeros((N_g, N_p, N_t))
     I_g = np.zeros((N_g, N_p, N_t))
     E_g = np.zeros((N_g, N_p, N_t))
@@ -64,17 +67,21 @@ def forward_integration(u_con, c1, beta, c_gh, T, pop_hat, age_er,
     H_wg = np.zeros((N_g, N_p, N_t))
     H_cg = np.zeros((N_g, N_p, N_t))
     S_xg = np.zeros((N_g, N_p, N_t))
+    I2_g = np.zeros((N_g, N_p, N_t))
+    E2_g = np.zeros((N_g, N_p, N_t))
+    S_pg = np.zeros((N_g, N_p, N_t))
     D_g = np.zeros((N_g, N_p, N_t))
     Q_0g = np.zeros((N_g, N_p, N_t))
     Q_1g = np.zeros((N_g, N_p, N_t))
     H_rg = np.zeros((N_g, N_p, N_t))
     S_vg = np.zeros((N_g, N_p, N_t))
-    S_pg = np.zeros((N_g, N_p, N_t))
 
     # Initializing with CSV values
     S_g[:, :, 0] = epidemic_npy[:, :, 0]
-    I_g[:, :, 0] = epidemic_npy[:, :, 1]
-    E_g[:, :, 0] = epidemic_npy[:, :, 2]
+    I_g[:, :, 0] = 0.9*epidemic_npy[:, :, 1]
+    I2_g[:, :, 0] = 0.1*epidemic_npy[:, :, 1]
+    E_g[:, :, 0] = 0.9*epidemic_npy[:, :, 2]
+    E2_g[:, :, 0] = 0.1*epidemic_npy[:, :, 2]
     R_g[:, :, 0] = epidemic_npy[:, :, 3]
     V_g[:, :, 0] = epidemic_npy[:, :, 4]
     S_xg[:, :, 0] = epidemic_npy[:, :, 5]
@@ -88,12 +95,12 @@ def forward_integration(u_con, c1, beta, c_gh, T, pop_hat, age_er,
     L_g = np.zeros((N_g, N_p, N_t))
 
     # Function to calculate the force of infection
-    def force_of_inf(I_h, c_gh, k, N_g, N_p, mob, pop_hat):
+    def force_of_inf(I_h, c_gh, k, N_g, N_p, mob, pop_hat,I_2):
         fi = 0.0
         for h in range(N_g):
             for m in range(N_p):
                 for l in range(N_p):
-                    fi = fi + (mob[k, m]*mob[l, m]*I_h[h, l]*c_gh[h]*age_er[l, h])/pop_hat[m]
+                    fi = fi + (mob[k, m]*mob[l, m]*(I_h[h, l]+I_2[h,l])*c_gh[h]*age_er[l, h])/pop_hat[m]
         return fi
 
     # Short method to get the normalized metric (infectious or hospitalized)
@@ -166,8 +173,8 @@ def forward_integration(u_con, c1, beta, c_gh, T, pop_hat, age_er,
             # Go over all age groups starting from the last one
             for g in range(N_g-1, -1, -1):
                 # Calculate the force of infection
-                lambda_g = force_of_inf(I_g[:, :, j], c_gh[:, g], n, N_g, N_p, c1, pop_hat)
-                L_g[g, n, j] = lambda_g
+                lambda_g = force_of_inf(I_g[:, :, j], c_gh[:, g], n, N_g, N_p, c1, pop_hat,I2_g[:,:,j])
+                L_g[g, n, j] = beta*lambda_g
 
                 if u_op_file is None:
                     # Enter if no one else is missing to vaccinate in age g,
@@ -227,23 +234,25 @@ def forward_integration(u_con, c1, beta, c_gh, T, pop_hat, age_er,
 
                 # Ensures that we do not keep vaccinating after there are no susceptibles left
                 u[g, n, j] = min(u[g, n, j], max(0.0, S_g[g, n, j] - beta*lambda_g*S_g[g, n, j]))
-
-                # Epidemic dynamics
+                
                 S_g[g, n, j+1] = S_g[g, n, j] - beta*lambda_g*S_g[g, n, j] - u[g, n, j]
-                S_xg[g, n, j+1] = S_xg[g, n, j] - beta*lambda_g*S_xg[g, n, j]
+                S_xg[g, n, j+1] = S_xg[g, n, j] - beta*lambda_g*S_xg[g, n, j] 
                 S_vg[g, n, j+1] = S_vg[g, n, j] - beta*lambda_g*S_vg[g, n, j] + u[g, n, j] - T_V*S_vg[g, n, j]
-                S_pg[g, n, j+1] = S_pg[g, n, j] - beta*lambda_g*S_pg[g, n, j] + (1.-e)*T_V*S_vg[g, n, j]
+                S_pg[g, n, j+1] = S_pg[g, n, j] - omega*beta*lambda_g*S_pg[g, n, j] + (1.-e)*T_V*S_vg[g, n, j]
                 V_g[g, n, j+1] = V_g[g, n, j] + e*T_V*S_vg[g, n, j]
-                E_g[g, n, j+1] = E_g[g, n, j] + beta*lambda_g*(S_g[g, n, j] + S_vg[g, n, j] + S_xg[g, n, j] + S_pg[g, n, j]) - T_E*E_g[g, n, j]
+                E_g[g, n, j+1] = E_g[g, n, j] + beta*lambda_g*(S_g[g, n, j]+S_vg[g, n, j] +S_xg[g, n, j] )  - T_E*E_g[g, n, j]
+                E2_g[g, n, j+1] = E2_g[g, n, j] + omega*beta*lambda_g*S_pg[g, n, j]  - T_E*E2_g[g, n, j]                      
                 I_g[g, n, j+1] = I_g[g, n, j] + T_E*E_g[g, n, j] - T_I*I_g[g, n, j]
-                Q_0g[g, n, j+1] = Q_0g[g, n, j] + (1.-p_H[g])*T_I*I_g[g, n, j] - T_q0*Q_0g[g, n, j]
-                Q_1g[g, n, j+1] = Q_1g[g, n, j] + p_H[g]*T_I*I_g[g, n, j] - T_q1*Q_1g[g, n, j]
+                I2_g[g, n, j+1] = I2_g[g, n, j] + T_E*E2_g[g, n, j] - T_I*I2_g[g, n, j]
+                Q_0g[g, n, j+1] = Q_0g[g, n, j] + (1.-p_H[g])*T_I*I_g[g, n, j] - T_q0*Q_0g[g, n, j] + (1.-pi*p_H[g])*T_I*I2_g[g, n, j]
+                Q_1g[g, n, j+1] = Q_1g[g, n, j] + p_H[g]*T_I*I_g[g, n, j] + pi*p_H[g]*T_I*I2_g[g, n, j] - T_q1*Q_1g[g, n, j]
                 H_wg[g, n, j+1] = H_wg[g, n, j] + T_q1*Q_1g[g, n, j] - T_hw*H_wg[g, n, j]
                 H_cg[g, n, j+1] = H_cg[g, n, j] + p_c[g]*T_hw*H_wg[g, n, j] - T_hc*H_cg[g, n, j]
                 H_rg[g, n, j+1] = H_rg[g, n, j] + (1.-mu_c[g])*T_hc*H_cg[g, n, j] - T_hr*H_rg[g, n, j]
                 R_g[g, n, j+1] = R_g[g, n, j] + T_hr*H_rg[g, n, j] + (1.-mu_w[g])*(1.-p_c[g])*T_hw*H_wg[g, n, j] + (1.-mu_q[g])*T_q0*Q_0g[g, n, j]
                 D_g[g, n, j+1] = D_g[g, n, j] + mu_q[g]*T_q0*Q_0g[g, n, j]+mu_w[g]*(1.-p_c[g])*T_hw*H_wg[g, n, j] + mu_c[g]*T_hc*H_cg[g, n, j]
-
+     
+                
                 hospitalized_incidence[g, n, j] = T_q1*Q_1g[g, n, j]
                 infections_incidence[g, n, j] = T_E*E_g[g, n, j]
 

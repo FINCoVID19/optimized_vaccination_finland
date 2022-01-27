@@ -193,6 +193,8 @@ EPIDEMIC = {
     'T_hr': 1.,
     'alpha': 0.9,
     'e': 0.7,
+    'omega': 0.2, 
+    'pi': 0.2,
     'ervas_order': ['HYKS', 'TYKS', 'TAYS', 'KYS', 'OYS'],
     'mu_q': {
         8: np.array([0, 0, 0, 0, 0, 0, 0, 0.1]),
